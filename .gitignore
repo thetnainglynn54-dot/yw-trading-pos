@@ -1,0 +1,9 @@
+﻿.streamlit/secrets.toml
+*.db
+*.sqlite
+*.sqlite3
+*.pyc
+__pycache__/
+*.log
+.env
+*.json
