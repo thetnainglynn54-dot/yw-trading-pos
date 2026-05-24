@@ -136,11 +136,18 @@ st.markdown("""
         height: calc(100vh - 560px);
         min-height: 180px;
     }
-    @media (max-width: 900px) {
+    .mobile-bottom-nav {
+        display: none;
+    }
+    .mobile-page-anchor {
+        scroll-margin-top: 1rem;
+    }
+    @media (max-width: 640px) {
         .block-container {
             padding-left: 0.75rem !important;
             padding-right: 0.75rem !important;
             padding-top: 1rem !important;
+            padding-bottom: 6.5rem !important;
         }
         [data-testid="column"] {
             width: 100% !important;
@@ -157,6 +164,54 @@ st.markdown("""
         [data-testid="stDataFrame"],
         [data-testid="stDataEditor"] {
             overflow-x: auto !important;
+        }
+        .mobile-app-title {
+            display: block !important;
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: #111827;
+            padding: 0.35rem 0 0.75rem 0;
+            text-align: center;
+        }
+        .mobile-bottom-nav {
+            position: fixed;
+            left: 0.75rem;
+            right: 0.75rem;
+            bottom: 0.75rem;
+            z-index: 999999;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.35rem;
+            padding: 0.65rem 0.5rem;
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid #e5e7eb;
+            border-radius: 22px;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+            backdrop-filter: blur(10px);
+        }
+        .mobile-bottom-nav a {
+            color: #6b7280 !important;
+            text-decoration: none !important;
+            text-align: center;
+            font-size: 0.74rem;
+            font-weight: 700;
+            line-height: 1.1;
+            padding: 0.35rem 0.15rem;
+            border-radius: 14px;
+        }
+        .mobile-bottom-nav a span {
+            display: block;
+            font-size: 1.15rem;
+            margin-bottom: 0.18rem;
+        }
+        .mobile-bottom-nav a:first-child {
+            color: #f59e0b !important;
+            background: #fff7ed;
+        }
+    }
+    @media (min-width: 641px) {
+        .mobile-app-title {
+            display: none !important;
         }
     }
     </style>
@@ -549,8 +604,18 @@ with st.sidebar:
         st.session_state.cart = []
         st.rerun()
 
+st.markdown("""
+    <div class="mobile-app-title">YW Trading POS</div>
+    <nav class="mobile-bottom-nav" aria-label="Mobile bottom navigation">
+        <a href="#dashboard"><span>D</span>Dashboard</a>
+        <a href="#new-transaction"><span>+</span>New</a>
+        <a href="#history"><span>H</span>History</a>
+    </nav>
+""", unsafe_allow_html=True)
+
 
 # GG_1>>> Dashboard Area -----
+st.markdown('<div id="dashboard" class="mobile-page-anchor"></div>', unsafe_allow_html=True)
 
 # --- Dashboard Metric Box များအတွက် CSS Styling ---
 st.markdown("""
@@ -633,6 +698,7 @@ with st.container(border=True):
 
 
 # HH_1 >>> New Transaction Area -----
+st.markdown('<div id="new-transaction" class="mobile-page-anchor"></div>', unsafe_allow_html=True)
 st.write("#### ➕ New Transaction")
 r1_c1, r1_c2, r1_c3 = st.columns([1, 1, 1])
 
@@ -837,6 +903,7 @@ if st.button("Save Transaction", use_container_width=True, type="primary"):
 
 
 # KK_1 >>> History Table (Cloud Version) -----
+st.markdown('<div id="history" class="mobile-page-anchor"></div>', unsafe_allow_html=True)
 st.write("#### 📋 Transaction History")
 
 if not df.empty:
