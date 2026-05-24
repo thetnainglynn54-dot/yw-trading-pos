@@ -247,6 +247,54 @@ st.markdown("""
             border-color: #fed7aa !important;
             color: #f59e0b !important;
         }
+        div.element-container:has(.mobile-nav-marker) {
+            display: none !important;
+        }
+        div.element-container:has(.mobile-nav-marker) + div[data-testid="stHorizontalBlock"],
+        div.element-container:has(.mobile-nav-marker) + div.element-container,
+        div.element-container:has(.mobile-nav-marker) + div.element-container div[data-testid="stHorizontalBlock"] {
+            position: fixed !important;
+            left: 0.75rem !important;
+            right: 0.75rem !important;
+            bottom: 0.75rem !important;
+            z-index: 999999 !important;
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr) !important;
+            gap: 0.35rem !important;
+            padding: 0.65rem 0.5rem !important;
+            background: rgba(255, 255, 255, 0.96) !important;
+            border: 1px solid #e5e7eb !important;
+            border-radius: 22px !important;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16) !important;
+            backdrop-filter: blur(10px) !important;
+        }
+        div.element-container:has(.mobile-nav-marker) + div[data-testid="stHorizontalBlock"] [data-testid="column"],
+        div.element-container:has(.mobile-nav-marker) + div.element-container [data-testid="column"] {
+            width: auto !important;
+            flex: 1 1 0 !important;
+        }
+        div.element-container:has(.mobile-nav-marker) + div[data-testid="stHorizontalBlock"] button,
+        div.element-container:has(.mobile-nav-marker) + div.element-container button {
+            min-height: 3.25rem !important;
+            border-radius: 14px !important;
+            white-space: pre-line !important;
+            font-size: 0.78rem !important;
+            font-weight: 700 !important;
+            line-height: 1.15 !important;
+            padding: 0.25rem !important;
+        }
+        div.element-container:has(.mobile-nav-marker) + div[data-testid="stHorizontalBlock"] button[kind="secondary"],
+        div.element-container:has(.mobile-nav-marker) + div.element-container button[kind="secondary"] {
+            background: #ffffff !important;
+            border-color: transparent !important;
+            color: #6b7280 !important;
+        }
+        div.element-container:has(.mobile-nav-marker) + div[data-testid="stHorizontalBlock"] button[kind="primary"],
+        div.element-container:has(.mobile-nav-marker) + div.element-container button[kind="primary"] {
+            background: #fff7ed !important;
+            border-color: #fed7aa !important;
+            color: #f59e0b !important;
+        }
     }
     @media (min-width: 641px) {
         .mobile-app-title {
