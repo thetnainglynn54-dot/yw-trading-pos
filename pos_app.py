@@ -204,7 +204,7 @@ st.markdown("""
             font-size: 1.15rem;
             margin-bottom: 0.18rem;
         }
-        .mobile-bottom-nav a:first-child {
+        .mobile-bottom-nav a.active {
             color: #f59e0b !important;
             background: #fff7ed;
         }
@@ -604,524 +604,540 @@ with st.sidebar:
         st.session_state.cart = []
         st.rerun()
 
-st.markdown("""
+valid_mobile_pages = {"dashboard", "new", "history"}
+mobile_page = st.query_params.get("mobile_page", "")
+if isinstance(mobile_page, list):
+    mobile_page = mobile_page[0] if mobile_page else ""
+
+show_all_sections = mobile_page not in valid_mobile_pages
+show_dashboard = show_all_sections or mobile_page == "dashboard"
+show_new_transaction = show_all_sections or mobile_page == "new"
+show_history = show_all_sections or mobile_page == "history"
+active_nav = mobile_page if mobile_page in valid_mobile_pages else "dashboard"
+
+st.markdown(f"""
     <div class="mobile-app-title">YW Trading POS</div>
     <nav class="mobile-bottom-nav" aria-label="Mobile bottom navigation">
-        <a href="#dashboard"><span>D</span>Dashboard</a>
-        <a href="#new-transaction"><span>+</span>New</a>
-        <a href="#history"><span>H</span>History</a>
+        <a class="{'active' if active_nav == 'dashboard' else ''}" href="?mobile_page=dashboard"><span>D</span>Dashboard</a>
+        <a class="{'active' if active_nav == 'new' else ''}" href="?mobile_page=new"><span>+</span>New</a>
+        <a class="{'active' if active_nav == 'history' else ''}" href="?mobile_page=history"><span>H</span>History</a>
     </nav>
 """, unsafe_allow_html=True)
 
 
-# GG_1>>> Dashboard Area -----
-st.markdown('<div id="dashboard" class="mobile-page-anchor"></div>', unsafe_allow_html=True)
+if show_dashboard:
+    # GG_1>>> Dashboard Area -----
+    st.markdown('<div id="dashboard" class="mobile-page-anchor"></div>', unsafe_allow_html=True)
 
-# --- Dashboard Metric Box များအတွက် CSS Styling ---
-st.markdown("""
-    <style>
-    /* Metric Box များကို ပိုမိုလှပအောင် ပြုပြင်ခြင်း */
-    [data-testid="stMetric"] {
-        background-color: #ffffff !important;
-        border-left: 6px solid #00bcd4 !important;
-        padding: 15px !important;
-        border-radius: 10px !important;
-        box-shadow: 2px 2px 8px rgba(0,0,0,0.05) !important;
-    }
+    # --- Dashboard Metric Box များအတွက် CSS Styling ---
+    st.markdown("""
+        <style>
+        /* Metric Box များကို ပိုမိုလှပအောင် ပြုပြင်ခြင်း */
+        [data-testid="stMetric"] {
+            background-color: #ffffff !important;
+            border-left: 6px solid #00bcd4 !important;
+            padding: 15px !important;
+            border-radius: 10px !important;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.05) !important;
+        }
     
-    .stApp {
-        background-color: #ffffff !important;
-    }
+        .stApp {
+            background-color: #ffffff !important;
+        }
     
-    div.stButton > button[kind="primary"] { background-color: #007bff !important; color: white !important; }
-    div.stButton > button[kind="secondary"] { background-color: #ff4b4b !important; color: white !important; }
-    </style>
-""", unsafe_allow_html=True)
+        div.stButton > button[kind="primary"] { background-color: #007bff !important; color: white !important; }
+        div.stButton > button[kind="secondary"] { background-color: #ff4b4b !important; color: white !important; }
+        </style>
+    """, unsafe_allow_html=True)
 
-st.write("<h2 style='text-align: left; color: #000000;'> 📊 Yoon Waddy Dashboard</h2>", unsafe_allow_html=True)
+    st.write("<h2 style='text-align: left; color: #000000;'> 📊 Yoon Waddy Dashboard</h2>", unsafe_allow_html=True)
 
-with st.container(border=True):
-    dash_col1, dash_col2, dash_col3 = st.columns([2, 2, 2])
-    d_start = dash_col1.date_input("Dash Start Date", value=date.today(), key="ds_key")
-    d_end = dash_col2.date_input("Dash End Date", value=date.today(), key="de_key")
-    dash_col3.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        dash_col1, dash_col2, dash_col3 = st.columns([2, 2, 2])
+        d_start = dash_col1.date_input("Dash Start Date", value=date.today(), key="ds_key")
+        d_end = dash_col2.date_input("Dash End Date", value=date.today(), key="de_key")
+        dash_col3.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
     
-    if dash_col3.button("🔍 Search Dash", use_container_width=True, type="primary"):
-        st.rerun()
-
-    # --- Filter Logic ---
-    # df ကို load_data() ကနေ Date အလိုက် Ascending စီပြီးသား အခြေအနေမှာ သုံးပါမယ်
-    mask = (df["Date"] >= d_start) & (df["Date"] <= d_end)
-    f_df = df.loc[mask]
-
-    # တွက်ချက်မှုများ (ရွေးချယ်ထားသော ရက်စွဲအတွင်း)
-    t_pur = (f_df["Purchase Qty"] * f_df["Pur Price"]).sum()
-    t_sales = (f_df["Sale Qty"] * f_df["Sale Price"]).sum()
-    t_inc = f_df["Other Income"].sum()
-    t_exp = f_df["Expense"].sum()
-    total_profit = t_sales - t_pur # အခြေခံအမြတ်တွက်နည်း
-    
-    # Stock Balance Value (လက်ကျန်ပစ္စည်းတန်ဖိုး) Cloud Version ---
-    if not df.empty:
-        # ID မရှိသဖြင့် DataFrame ၏ Row အစီအစဉ်အတိုင်း နောက်ဆုံး Row ကို ယူပါမည်
-        # load_data တွင် Date အလိုက် စီထားပြီးဖြစ်သဖြင့် tail(1) သည် နောက်ဆုံးစာရင်း ဖြစ်ပါသည်
-        current_balance = df.groupby('Item').tail(1)['Balance'].sum()
-    else:
-        current_balance = 0
-
-    # မျက်လုံးခလုတ် (Show/Hide Values) -----
-    d_col_title, d_col_eye = st.columns([0.92, 0.08])
-    with d_col_eye:
-        icon = "👁️" if st.session_state.show_values else "🙈" 
-        if st.button(icon, key="dash_eye"):
-            st.session_state.show_values = not st.session_state.show_values
+        if dash_col3.button("🔍 Search Dash", use_container_width=True, type="primary"):
             st.rerun()
 
-    # Masking Function -----
-    def mask_v(val):
-        if st.session_state.get('show_values', False):
-            return f"{val:,.0f} THB"
-        return "****** THB"
+        # --- Filter Logic ---
+        # df ကို load_data() ကနေ Date အလိုက် Ascending စီပြီးသား အခြေအနေမှာ သုံးပါမယ်
+        mask = (df["Date"] >= d_start) & (df["Date"] <= d_end)
+        f_df = df.loc[mask]
 
-    # Metric များပြသခြင်း -----
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Total Purchase", mask_v(t_pur))
-    m2.metric("Total Sales", mask_v(t_sales))
-    m3.metric("Stock Balance Value", mask_v(current_balance))
-
-    s1, s2, s3 = st.columns(3)
-    s1.metric("Other Income", mask_v(t_inc))
-    s2.metric("Expense", mask_v(t_exp))
-    s3.metric("Profit (Sales - Pur)", mask_v(total_profit))
-
-    st.divider()
-
-
-# HH_1 >>> New Transaction Area -----
-st.markdown('<div id="new-transaction" class="mobile-page-anchor"></div>', unsafe_allow_html=True)
-st.write("#### ➕ New Transaction")
-r1_c1, r1_c2, r1_c3 = st.columns([1, 1, 1])
-
-with r1_c1:
-    tr_date = st.date_input("Date", date.today(), key="tr_date_key")
-
-with r1_c2:
-    cust_list = sorted([str(x) for x in df["Customer"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else []
-    c_sel = st.selectbox("Customer Name", ["Choose Customer"] + cust_list + ["+ Add New"], key="cust_drop")
-    cust_name = st.text_input("New Customer Name", placeholder="Enter customer name...", key="c_name") if c_sel == "+ Add New" else (c_sel if c_sel != "Choose Customer" else "")
-
-with r1_c3:
-    pay_list = sorted([str(x) for x in df["Payment"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else ["Cash", "KPay", "Wave"]
-    p_sel = st.selectbox("Payment Method", ["Choose Payment"] + pay_list + ["+ Add New"], key="pay_drop")
-    pay_type = st.text_input("New Payment Method", key="p_type_new") if p_sel == "+ Add New" else (p_sel if p_sel != "Choose Payment" else "Cash")
-
-f2, f3, f4 = st.columns(3)
-with f2:
-    b_list = sorted([str(x) for x in df["Brand"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else []
-    b_sel = st.selectbox("Brand", ["Choose Brand"] + b_list + ["+ Add New"], key="b_drop")
-    f_brand = st.text_input("New Brand", key="new_b_input") if b_sel == "+ Add New" else (b_sel if b_sel != "Choose Brand" else "")
-
-with f3:
-    if f_brand and b_sel != "+ Add New":
-        filtered_cats = sorted([str(x) for x in df[df["Brand"] == f_brand]["Category"].unique() if str(x) not in ["-", "nan"]])
-    else:
-        filtered_cats = []
+        # တွက်ချက်မှုများ (ရွေးချယ်ထားသော ရက်စွဲအတွင်း)
+        t_pur = (f_df["Purchase Qty"] * f_df["Pur Price"]).sum()
+        t_sales = (f_df["Sale Qty"] * f_df["Sale Price"]).sum()
+        t_inc = f_df["Other Income"].sum()
+        t_exp = f_df["Expense"].sum()
+        total_profit = t_sales - t_pur # အခြေခံအမြတ်တွက်နည်း
     
-    is_cat_disabled = (f_brand == "" or b_sel == "Choose Brand")
-    c_sel_val = st.selectbox("Category", ["Choose Category"] + filtered_cats + ["+ Add New"], 
-                             key="c_drop", 
-                             disabled=is_cat_disabled)
-    f_cat = st.text_input("New Category", key="new_c_input") if c_sel_val == "+ Add New" else (c_sel_val if c_sel_val != "Choose Category" else "")
+        # Stock Balance Value (လက်ကျန်ပစ္စည်းတန်ဖိုး) Cloud Version ---
+        if not df.empty:
+            # ID မရှိသဖြင့် DataFrame ၏ Row အစီအစဉ်အတိုင်း နောက်ဆုံး Row ကို ယူပါမည်
+            # load_data တွင် Date အလိုက် စီထားပြီးဖြစ်သဖြင့် tail(1) သည် နောက်ဆုံးစာရင်း ဖြစ်ပါသည်
+            current_balance = df.groupby('Item').tail(1)['Balance'].sum()
+        else:
+            current_balance = 0
 
-with f4:
-    if f_cat and c_sel_val != "+ Add New":
-        filtered_items = sorted([str(x) for x in df[(df["Brand"] == f_brand) & (df["Category"] == f_cat)]["Item"].unique() if str(x) not in ["-", "nan"]])
-    else:
-        filtered_items = []
-    
-    is_item_disabled = (f_cat == "" or c_sel_val == "Choose Category")
-    i_sel = st.selectbox("Item Name", ["Choose Item"] + filtered_items + ["+ Add New"], 
-                         key="i_drop", 
-                         disabled=is_item_disabled)
-    f_item = st.text_input("New Item", key="new_i_input") if i_sel == "+ Add New" else (i_sel if i_sel != "Choose Item" else "")
-
-# --- Stock နှင့် နောက်ဆုံးဈေးနှုန်းများ ရှာဖွေခြင်း (Cloud Version) ---
-l_stock, l_price, l_pur_price = 0.0, 0.0, 0.0 
-
-if f_item and f_item not in ["Choose Item", "+ Add New", ""]:
-    # ၁။ ရွေးချယ်ထားသော Item နှင့် ကိုက်ညီသည့် Row များကို ရှာပါ
-    matched = df[(df["Brand"] == f_brand) & (df["Category"] == f_cat) & (df["Item"] == f_item)]
-    
-    if not matched.empty:
-        # ၂။ နောက်ဆုံးသွင်းထားသော Record (နောက်ဆုံး Row) ကို ယူပါ
-        # load_data() တွင် Date အလိုက် စီထားပြီးဖြစ်သဖြင့် iloc[-1] က အသစ်ဆုံးဖြစ်ပါသည်
-        latest_row = matched.iloc[-1]
-        
-        l_stock = float(latest_row["Stock"])
-        l_price = float(latest_row["Sale Price"])
-        l_pur_price = float(latest_row["Pur Price"])
-
-# UI ပေါ်တွင် လက်ရှိ Stock ပြသခြင်း
-if f_item and f_item not in ["Choose Item", "+ Add New", ""]:
-    if l_stock <= 0:
-        st.error(f"❌ Current Stock for **{f_item}** : **{l_stock:,.0f}** (Out of Stock)")
-    else:
-        st.info(f"💡 Current Stock for **{f_item}** : **{l_stock:,.0f}** units")
-
-# အလိုအလျောက် ဈေးနှုန်းဖြည့်ပေးမည့် Logic
-def update_input_fields():
-    pq = st.session_state.get("pq", 0)
-    sq = st.session_state.get("sq", 0)
-
-    if pq > 0:
-        st.session_state.pp = float(l_pur_price)
-        st.session_state.sp = float(l_price)
-    elif sq > 0:
-        st.session_state.sp = float(l_price)
-        st.session_state.pp = 0.0
-    else:
-        st.session_state.pp = 0.0
-        st.session_state.sp = 0.0
-
-
-# II_1 >>> Input Sections -----
-
-# Session State ထဲတွင် key များ ရှိမရှိ အရင်စစ်ဆေးပြီး Default သတ်မှတ်ခြင်း
-if "pq" not in st.session_state: st.session_state.pq = 0.0
-if "sq" not in st.session_state: st.session_state.sq = 0.0
-if "pp" not in st.session_state: st.session_state.pp = 0.0
-if "sp" not in st.session_state: st.session_state.sp = 0.0
-
-col_p, col_s, col_o = st.columns(3)
-
-with col_p:
-    # Purchase Qty: sq (အရောင်း) ရှိနေလျှင် နှိပ်၍မရအောင် ပိတ်ထားမည်
-    p_qty = st.number_input(
-        "Purchase Qty", 
-        min_value=0.0, 
-        step=1.0, 
-        key="pq", 
-        on_change=update_input_fields,
-        disabled=(st.session_state.sq > 0)
-    )
-    
-    # Purchase Price logic: 
-    # Purchase Qty (pq) ရှိမှသာ သို့မဟုတ် အသစ်ထည့်ရန်ဖြစ်ပါက ဝယ်ဈေးကို ပြင်ခွင့်ပေးမည်
-    pur_price_disabled = (st.session_state.pq <= 0)
-    p_pr = st.number_input(
-        "Purchase Price (THB)", 
-        min_value=0.0, 
-        step=1.0, 
-        key="pp", 
-        disabled=pur_price_disabled
-    )
-
-with col_s:
-    # Sale Qty: pq (ဝယ်ယူမှု) ရှိနေလျှင် နှိပ်၍မရအောင် ပိတ်ထားမည်
-    s_qty = st.number_input(
-        "Sale Qty", 
-        min_value=0.0, 
-        step=1.0, 
-        key="sq", 
-        on_change=update_input_fields,
-        disabled=(st.session_state.pq > 0)
-    )
-    
-    # Sale Price logic: 
-    # ဝယ်ယူမှု (pq) သွင်းနေချိန်တွင်လည်း နောက်နောင်ရောင်းရန် ဈေးနှုန်းသတ်မှတ်နိုင်ရမည်
-    # အရောင်း (sq) ရှိနေလျှင်လည်း ဈေးနှုန်းပြင်နိုင်ရမည်
-    sale_price_disabled = (st.session_state.pq <= 0 and st.session_state.sq <= 0)
-    s_pr = st.number_input(
-        "Sale Price (THB)", 
-        min_value=0.0, 
-        step=1.0, 
-        key="sp",
-        disabled=sale_price_disabled
-    )
-
-with col_o:
-    f_inc_val = st.number_input("Other Income", min_value=0.0, step=1.0, key="fi")
-    f_exp_val = st.number_input("Expense", min_value=0.0, step=1.0, key="fe")
-
-
-# JJ_1 >>> Saving Logic (Google Sheets Version) -----
-if st.button("Save Transaction", use_container_width=True, type="primary"):
-    # ၁။ အရောင်းသွင်းလျှင် Stock ရှိမရှိ အရင်စစ်မည်
-    if s_qty > 0 and l_stock < s_qty:
-        st.error(f"❌ လက်ကျန် Stock ({l_stock:,.0f}) ထက် ပိုရောင်း၍မရပါ။")
-        st.stop()
-
-    # ၂။ အနှုတ်ဂဏန်းများ မဝင်အောင် ကာကွယ်ခြင်း
-    if p_qty < 0 or s_qty < 0 or f_inc_val < 0 or f_exp_val < 0:
-        st.error("❌ Quantity သို့မဟုတ် Amount များသည် အနှုတ်ဂဏန်း (Negative) မဖြစ်ရပါ။")
-        st.stop()
-    
-    # ၃။ အနည်းဆုံး အချက်အလက် တစ်ခုခု ပါဝင်မှ သိမ်းမည်
-    elif (f_item or f_inc_val > 0 or f_exp_val > 0):
-        try:
-            with st.spinner("☁️ Cloud ပေါ်သို့ သိမ်းဆည်းနေပါသည်..."):
-                before_amt = float(l_stock) if f_item and f_item != "-" else 0.0
-                after_stock = max((before_amt + float(p_qty)) - float(s_qty), 0.0)
-                balance = after_stock * float(p_pr) if float(p_pr) > 0 else 0.0
-
-                # သိမ်းဆည်းမည့် Row တန်ဖိုးများ (Column ၁၅ ခု)
-                row_data = {
-                    "Date": tr_date, # load_data နှင့် ညီစေရန် Date object အတိုင်း ထားပါ
-                    "Customer": cust_name if cust_name else "-",
-                    "Payment": pay_type if pay_type else "Cash",
-                    "Brand": f_brand if f_brand else "-",
-                    "Category": f_cat if f_cat else "-",
-                    "Item": f_item if f_item else "-",
-                    "Before Amt": before_amt,
-                    "Purchase Qty": float(p_qty),
-                    "Pur Price": float(p_pr),
-                    "Sale Qty": float(s_qty),
-                    "Sale Price": float(s_pr),
-                    "Stock": after_stock,
-                    "Balance": balance,
-                    "Other Income": float(f_inc_val),
-                    "Expense": float(f_exp_val)
-                }
-
-                worksheet = get_worksheet()
-                worksheet.append_row(
-                    [as_sheet_value(row_data[col]) for col in EXPECTED_COLS],
-                    value_input_option="USER_ENTERED"
-                )
-                clear_data_cache()
-
-                # ၅။ ပြီးဆုံးကြောင်း အသိပေးပြီး UI Reset လုပ်မည်
-                st.session_state.reset_trigger = True
-                st.success("✅ စာရင်းကို Cloud ပေါ်သို့ သိမ်းဆည်းပြီး Stock ပြန်လည်တွက်ချက်ပြီးပါပြီ!")
+        # မျက်လုံးခလုတ် (Show/Hide Values) -----
+        d_col_title, d_col_eye = st.columns([0.92, 0.08])
+        with d_col_eye:
+            icon = "👁️" if st.session_state.show_values else "🙈" 
+            if st.button(icon, key="dash_eye"):
+                st.session_state.show_values = not st.session_state.show_values
                 st.rerun()
 
-        except Exception as e:
-            st.error(f"❌ Google Sheets Error: {e}")
-            
-    else:
-        st.warning("⚠️ သိမ်းဆည်းရန် အချက်အလက်များ ပြည့်စုံစွာ ဖြည့်စွက်ပေးပါ။")
+        # Masking Function -----
+        def mask_v(val):
+            if st.session_state.get('show_values', False):
+                return f"{val:,.0f} THB"
+            return "****** THB"
+
+        # Metric များပြသခြင်း -----
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Total Purchase", mask_v(t_pur))
+        m2.metric("Total Sales", mask_v(t_sales))
+        m3.metric("Stock Balance Value", mask_v(current_balance))
+
+        s1, s2, s3 = st.columns(3)
+        s1.metric("Other Income", mask_v(t_inc))
+        s2.metric("Expense", mask_v(t_exp))
+        s3.metric("Profit (Sales - Pur)", mask_v(total_profit))
+
+        st.divider()
 
 
-# KK_1 >>> History Table (Cloud Version) -----
-st.markdown('<div id="history" class="mobile-page-anchor"></div>', unsafe_allow_html=True)
-st.write("#### 📋 Transaction History")
 
-if not df.empty:
-    # Filter များကို တစ်တန်းတည်းပြခြင်း
-    f1, f2, f3, f4, f5 = st.columns(5)
-    with f1: sel_cus = st.selectbox("Filter by Customer", ["All"] + sorted(df["Customer"].dropna().unique().tolist()), key="f_cus")
-    with f2: sel_pay = st.selectbox("Filter by Payment", ["All"] + sorted(df["Payment"].dropna().unique().tolist()), key="f_pay")
-    with f3: sel_brand = st.selectbox("Filter by Brand", ["All"] + sorted(df["Brand"].dropna().unique().tolist()), key="f_brand")
-    with f4: sel_cat = st.selectbox("Filter by Category", ["All"] + sorted(df["Category"].dropna().unique().tolist()), key="f_cat")
-    with f5: sel_item = st.selectbox("Filter by Item", ["All"] + sorted(df["Item"].dropna().unique().tolist()), key="f_item")
+if show_new_transaction:
+    # HH_1 >>> New Transaction Area -----
+    st.markdown('<div id="new-transaction" class="mobile-page-anchor"></div>', unsafe_allow_html=True)
+    st.write("#### ➕ New Transaction")
+    r1_c1, r1_c2, r1_c3 = st.columns([1, 1, 1])
 
-    # Date Range နှင့် ခလုတ်များ
-    with st.container(border=True):
-        h_col1, h_col2, h_col3, h_col4, h_col5, h_col6 = st.columns([1, 1, 1, 1, 1, 1])
-        h_start = h_col1.date_input("Start Date", value=date.today(), key="h_start_val")
-        h_end = h_col2.date_input("End Date", value=date.today(), key="h_end_val")
-        
-        h_col3.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        history_search = h_col3.button("🔍 Search", use_container_width=True, type="primary")    
+    with r1_c1:
+        tr_date = st.date_input("Date", date.today(), key="tr_date_key")
 
-        h_col4.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        edit_btn = h_col4.button("📝 Edit", use_container_width=True, type="secondary") 
+    with r1_c2:
+        cust_list = sorted([str(x) for x in df["Customer"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else []
+        c_sel = st.selectbox("Customer Name", ["Choose Customer"] + cust_list + ["+ Add New"], key="cust_drop")
+        cust_name = st.text_input("New Customer Name", placeholder="Enter customer name...", key="c_name") if c_sel == "+ Add New" else (c_sel if c_sel != "Choose Customer" else "")
 
-        h_col5.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        print_btn = h_col5.button("🖨 Print", use_container_width=True, type="primary")
+    with r1_c3:
+        pay_list = sorted([str(x) for x in df["Payment"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else ["Cash", "KPay", "Wave"]
+        p_sel = st.selectbox("Payment Method", ["Choose Payment"] + pay_list + ["+ Add New"], key="pay_drop")
+        pay_type = st.text_input("New Payment Method", key="p_type_new") if p_sel == "+ Add New" else (p_sel if p_sel != "Choose Payment" else "Cash")
 
-        h_col6.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        delete_btn = h_col6.button("🗑 Delete", use_container_width=True, type="secondary")
+    f2, f3, f4 = st.columns(3)
+    with f2:
+        b_list = sorted([str(x) for x in df["Brand"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else []
+        b_sel = st.selectbox("Brand", ["Choose Brand"] + b_list + ["+ Add New"], key="b_drop")
+        f_brand = st.text_input("New Brand", key="new_b_input") if b_sel == "+ Add New" else (b_sel if b_sel != "Choose Brand" else "")
 
-    # Filter Logic
-    h_df = df.copy()
-    if history_search:
-        mask = (h_df["Date"] >= h_start) & (h_df["Date"] <= h_end)
-        h_df = h_df.loc[mask]
-
-    if sel_cus != "All": h_df = h_df[h_df["Customer"] == sel_cus]
-    if sel_pay != "All": h_df = h_df[h_df["Payment"] == sel_pay]
-    if sel_brand != "All": h_df = h_df[h_df["Brand"] == sel_brand]
-    if sel_cat != "All": h_df = h_df[h_df["Category"] == sel_cat]
-    if sel_item != "All": h_df = h_df[h_df["Item"] == sel_item]
-
-    # Data Editor (ရွေးချယ်နိုင်သော ဇယား)
-    # Original_Index သည် Google Sheet ထဲရှိ row order ကို ထိန်းထားသည်။
-    if "Original_Index" not in h_df.columns:
-        h_df["Original_Index"] = h_df.index
-    h_df = h_df.sort_values(by="Original_Index", ascending=False).reset_index(drop=True)
-    display_df = h_df.copy()
-    display_df.insert(0, "Select", False)
+    with f3:
+        if f_brand and b_sel != "+ Add New":
+            filtered_cats = sorted([str(x) for x in df[df["Brand"] == f_brand]["Category"].unique() if str(x) not in ["-", "nan"]])
+        else:
+            filtered_cats = []
     
-    t_key = f"hist_table_{st.session_state.get('table_key', 0)}"
-    edited_df = st.data_editor(
-        display_df,
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "Select": st.column_config.CheckboxColumn("Select", default=False),
-            "Original_Index": None # User ကို မပြပါ
-        },
-        key=t_key
-    )
+        is_cat_disabled = (f_brand == "" or b_sel == "Choose Brand")
+        c_sel_val = st.selectbox("Category", ["Choose Category"] + filtered_cats + ["+ Add New"], 
+                                 key="c_drop", 
+                                 disabled=is_cat_disabled)
+        f_cat = st.text_input("New Category", key="new_c_input") if c_sel_val == "+ Add New" else (c_sel_val if c_sel_val != "Choose Category" else "")
 
-    # LL_1 >>> EDIT DIALOG (Cloud Version) -----
-    @st.dialog("📝 Edit Transaction Record")
-    def edit_transaction_dialog(row_data, original_idx):
-        target_idx = int(original_idx)
-        target_item = str(row_data["Item"])
+    with f4:
+        if f_cat and c_sel_val != "+ Add New":
+            filtered_items = sorted([str(x) for x in df[(df["Brand"] == f_brand) & (df["Category"] == f_cat)]["Item"].unique() if str(x) not in ["-", "nan"]])
+        else:
+            filtered_items = []
+    
+        is_item_disabled = (f_cat == "" or c_sel_val == "Choose Category")
+        i_sel = st.selectbox("Item Name", ["Choose Item"] + filtered_items + ["+ Add New"], 
+                             key="i_drop", 
+                             disabled=is_item_disabled)
+        f_item = st.text_input("New Item", key="new_i_input") if i_sel == "+ Add New" else (i_sel if i_sel != "Choose Item" else "")
 
-        st.write(f"Editing Item: {target_item}")
+    # --- Stock နှင့် နောက်ဆုံးဈေးနှုန်းများ ရှာဖွေခြင်း (Cloud Version) ---
+    l_stock, l_price, l_pur_price = 0.0, 0.0, 0.0 
 
-        current_date = pd.to_datetime(row_data["Date"]).date()
-        current_customer = str(row_data.get("Customer", "-"))
-        current_payment = str(row_data.get("Payment", "Cash"))
-        current_pq = float(row_data.get("Purchase Qty", 0) or 0)
-        current_pp = float(row_data.get("Pur Price", 0) or 0)
-        current_sq = float(row_data.get("Sale Qty", 0) or 0)
-        current_sp = float(row_data.get("Sale Price", 0) or 0)
+    if f_item and f_item not in ["Choose Item", "+ Add New", ""]:
+        # ၁။ ရွေးချယ်ထားသော Item နှင့် ကိုက်ညီသည့် Row များကို ရှာပါ
+        matched = df[(df["Brand"] == f_brand) & (df["Category"] == f_cat) & (df["Item"] == f_item)]
+    
+        if not matched.empty:
+            # ၂။ နောက်ဆုံးသွင်းထားသော Record (နောက်ဆုံး Row) ကို ယူပါ
+            # load_data() တွင် Date အလိုက် စီထားပြီးဖြစ်သဖြင့် iloc[-1] က အသစ်ဆုံးဖြစ်ပါသည်
+            latest_row = matched.iloc[-1]
+        
+            l_stock = float(latest_row["Stock"])
+            l_price = float(latest_row["Sale Price"])
+            l_pur_price = float(latest_row["Pur Price"])
 
-        customer_list = sorted([str(x) for x in df["Customer"].dropna().unique().tolist()])
-        payment_list = sorted([str(x) for x in df["Payment"].dropna().unique().tolist()])
-        if current_customer not in customer_list:
-            customer_list.insert(0, current_customer)
-        if current_payment not in payment_list:
-            payment_list.insert(0, current_payment)
+    # UI ပေါ်တွင် လက်ရှိ Stock ပြသခြင်း
+    if f_item and f_item not in ["Choose Item", "+ Add New", ""]:
+        if l_stock <= 0:
+            st.error(f"❌ Current Stock for **{f_item}** : **{l_stock:,.0f}** (Out of Stock)")
+        else:
+            st.info(f"💡 Current Stock for **{f_item}** : **{l_stock:,.0f}** units")
 
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            new_date = st.date_input("Date", value=current_date, key=f"edit_date_{target_idx}")
-        with col2:
-            new_customer = st.selectbox(
-                "Customer",
-                options=customer_list,
-                index=customer_list.index(current_customer) if current_customer in customer_list else 0,
-                key=f"edit_customer_{target_idx}"
-            )
-        with col3:
-            new_payment = st.selectbox(
-                "Payment",
-                options=payment_list,
-                index=payment_list.index(current_payment) if current_payment in payment_list else 0,
-                key=f"edit_payment_{target_idx}"
-            )
+    # အလိုအလျောက် ဈေးနှုန်းဖြည့်ပေးမည့် Logic
+    def update_input_fields():
+        pq = st.session_state.get("pq", 0)
+        sq = st.session_state.get("sq", 0)
 
-        st.markdown("### Item Info")
-        i1, i2, i3 = st.columns(3)
-        with i1:
-            st.text_input("Brand", value=str(row_data["Brand"]), disabled=True, key=f"edit_brand_{target_idx}")
-        with i2:
-            st.text_input("Category", value=str(row_data["Category"]), disabled=True, key=f"edit_cat_{target_idx}")
-        with i3:
-            st.text_input("Item", value=target_item, disabled=True, key=f"edit_item_{target_idx}")
+        if pq > 0:
+            st.session_state.pp = float(l_pur_price)
+            st.session_state.sp = float(l_price)
+        elif sq > 0:
+            st.session_state.sp = float(l_price)
+            st.session_state.pp = 0.0
+        else:
+            st.session_state.pp = 0.0
+            st.session_state.sp = 0.0
 
-        st.markdown("---")
-        q1, q2 = st.columns(2)
-        with q1:
-            new_p_qty = st.number_input(
-                "Purchase Qty",
-                min_value=0.0,
-                value=current_pq,
-                step=1.0,
-                key=f"edit_pq_{target_idx}"
-            )
-            new_p_price = st.number_input(
-                "Purchase Price",
-                min_value=0.0,
-                value=current_pp,
-                step=1.0,
-                key=f"edit_pp_{target_idx}"
-            )
-        with q2:
-            new_s_qty = st.number_input(
-                "Sale Qty",
-                min_value=0.0,
-                value=current_sq,
-                step=1.0,
-                key=f"edit_sq_{target_idx}"
-            )
-            new_s_price = st.number_input(
-                "Sale Price",
-                min_value=0.0,
-                value=current_sp,
-                step=1.0,
-                key=f"edit_sp_{target_idx}"
-            )
 
-        st.markdown("---")
-        if st.button("Confirm Update", type="primary", use_container_width=True, key=f"confirm_update_{target_idx}"):
+    # II_1 >>> Input Sections -----
+
+    # Session State ထဲတွင် key များ ရှိမရှိ အရင်စစ်ဆေးပြီး Default သတ်မှတ်ခြင်း
+    if "pq" not in st.session_state: st.session_state.pq = 0.0
+    if "sq" not in st.session_state: st.session_state.sq = 0.0
+    if "pp" not in st.session_state: st.session_state.pp = 0.0
+    if "sp" not in st.session_state: st.session_state.sp = 0.0
+
+    col_p, col_s, col_o = st.columns(3)
+
+    with col_p:
+        # Purchase Qty: sq (အရောင်း) ရှိနေလျှင် နှိပ်၍မရအောင် ပိတ်ထားမည်
+        p_qty = st.number_input(
+            "Purchase Qty", 
+            min_value=0.0, 
+            step=1.0, 
+            key="pq", 
+            on_change=update_input_fields,
+            disabled=(st.session_state.sq > 0)
+        )
+    
+        # Purchase Price logic: 
+        # Purchase Qty (pq) ရှိမှသာ သို့မဟုတ် အသစ်ထည့်ရန်ဖြစ်ပါက ဝယ်ဈေးကို ပြင်ခွင့်ပေးမည်
+        pur_price_disabled = (st.session_state.pq <= 0)
+        p_pr = st.number_input(
+            "Purchase Price (THB)", 
+            min_value=0.0, 
+            step=1.0, 
+            key="pp", 
+            disabled=pur_price_disabled
+        )
+
+    with col_s:
+        # Sale Qty: pq (ဝယ်ယူမှု) ရှိနေလျှင် နှိပ်၍မရအောင် ပိတ်ထားမည်
+        s_qty = st.number_input(
+            "Sale Qty", 
+            min_value=0.0, 
+            step=1.0, 
+            key="sq", 
+            on_change=update_input_fields,
+            disabled=(st.session_state.pq > 0)
+        )
+    
+        # Sale Price logic: 
+        # ဝယ်ယူမှု (pq) သွင်းနေချိန်တွင်လည်း နောက်နောင်ရောင်းရန် ဈေးနှုန်းသတ်မှတ်နိုင်ရမည်
+        # အရောင်း (sq) ရှိနေလျှင်လည်း ဈေးနှုန်းပြင်နိုင်ရမည်
+        sale_price_disabled = (st.session_state.pq <= 0 and st.session_state.sq <= 0)
+        s_pr = st.number_input(
+            "Sale Price (THB)", 
+            min_value=0.0, 
+            step=1.0, 
+            key="sp",
+            disabled=sale_price_disabled
+        )
+
+    with col_o:
+        f_inc_val = st.number_input("Other Income", min_value=0.0, step=1.0, key="fi")
+        f_exp_val = st.number_input("Expense", min_value=0.0, step=1.0, key="fe")
+
+
+    # JJ_1 >>> Saving Logic (Google Sheets Version) -----
+    if st.button("Save Transaction", use_container_width=True, type="primary"):
+        # ၁။ အရောင်းသွင်းလျှင် Stock ရှိမရှိ အရင်စစ်မည်
+        if s_qty > 0 and l_stock < s_qty:
+            st.error(f"❌ လက်ကျန် Stock ({l_stock:,.0f}) ထက် ပိုရောင်း၍မရပါ။")
+            st.stop()
+
+        # ၂။ အနှုတ်ဂဏန်းများ မဝင်အောင် ကာကွယ်ခြင်း
+        if p_qty < 0 or s_qty < 0 or f_inc_val < 0 or f_exp_val < 0:
+            st.error("❌ Quantity သို့မဟုတ် Amount များသည် အနှုတ်ဂဏန်း (Negative) မဖြစ်ရပါ။")
+            st.stop()
+    
+        # ၃။ အနည်းဆုံး အချက်အလက် တစ်ခုခု ပါဝင်မှ သိမ်းမည်
+        elif (f_item or f_inc_val > 0 or f_exp_val > 0):
             try:
-                all_df = conn.read(ttl=60)
+                with st.spinner("☁️ Cloud ပေါ်သို့ သိမ်းဆည်းနေပါသည်..."):
+                    before_amt = float(l_stock) if f_item and f_item != "-" else 0.0
+                    after_stock = max((before_amt + float(p_qty)) - float(s_qty), 0.0)
+                    balance = after_stock * float(p_pr) if float(p_pr) > 0 else 0.0
 
-                all_df.loc[target_idx, "Date"] = new_date
-                all_df.loc[target_idx, "Customer"] = new_customer
-                all_df.loc[target_idx, "Payment"] = new_payment
-                all_df.loc[target_idx, "Purchase Qty"] = float(new_p_qty)
-                all_df.loc[target_idx, "Pur Price"] = float(new_p_price)
-                all_df.loc[target_idx, "Sale Qty"] = float(new_s_qty)
-                all_df.loc[target_idx, "Sale Price"] = float(new_s_price)
+                    # သိမ်းဆည်းမည့် Row တန်ဖိုးများ (Column ၁၅ ခု)
+                    row_data = {
+                        "Date": tr_date, # load_data နှင့် ညီစေရန် Date object အတိုင်း ထားပါ
+                        "Customer": cust_name if cust_name else "-",
+                        "Payment": pay_type if pay_type else "Cash",
+                        "Brand": f_brand if f_brand else "-",
+                        "Category": f_cat if f_cat else "-",
+                        "Item": f_item if f_item else "-",
+                        "Before Amt": before_amt,
+                        "Purchase Qty": float(p_qty),
+                        "Pur Price": float(p_pr),
+                        "Sale Qty": float(s_qty),
+                        "Sale Price": float(s_pr),
+                        "Stock": after_stock,
+                        "Balance": balance,
+                        "Other Income": float(f_inc_val),
+                        "Expense": float(f_exp_val)
+                    }
 
-                all_df = recalculate_items_in_df(all_df, [target_item])
-                conn.update(data=all_df)
-                clear_data_cache()
+                    worksheet = get_worksheet()
+                    worksheet.append_row(
+                        [as_sheet_value(row_data[col]) for col in EXPECTED_COLS],
+                        value_input_option="USER_ENTERED"
+                    )
+                    clear_data_cache()
 
-                st.success("Transaction Updated Successfully")
-                st.session_state.table_key = st.session_state.get("table_key", 0) + 1
-                st.rerun()
+                    # ၅။ ပြီးဆုံးကြောင်း အသိပေးပြီး UI Reset လုပ်မည်
+                    st.session_state.reset_trigger = True
+                    st.success("✅ စာရင်းကို Cloud ပေါ်သို့ သိမ်းဆည်းပြီး Stock ပြန်လည်တွက်ချက်ပြီးပါပြီ!")
+                    st.rerun()
+
             except Exception as e:
-                st.error(f"Update Error: {e}")
+                st.error(f"❌ Google Sheets Error: {e}")
+            
+        else:
+            st.warning("⚠️ သိမ်းဆည်းရန် အချက်အလက်များ ပြည့်စုံစွာ ဖြည့်စွက်ပေးပါ။")
 
-    # LL_2 >>> DELETE DIALOG (Cloud Version) -----
-    @st.dialog("⚠️ Confirm Delete")
-    def delete_confirmation_dialog(selected_df):
-        st.warning(f"Delete {len(selected_df)} selected records?")
-        confirm_pw = st.text_input("Admin Password", type="password")
+
+
+if show_history:
+    # KK_1 >>> History Table (Cloud Version) -----
+    st.markdown('<div id="history" class="mobile-page-anchor"></div>', unsafe_allow_html=True)
+    st.write("#### 📋 Transaction History")
+
+    if not df.empty:
+        # Filter များကို တစ်တန်းတည်းပြခြင်း
+        f1, f2, f3, f4, f5 = st.columns(5)
+        with f1: sel_cus = st.selectbox("Filter by Customer", ["All"] + sorted(df["Customer"].dropna().unique().tolist()), key="f_cus")
+        with f2: sel_pay = st.selectbox("Filter by Payment", ["All"] + sorted(df["Payment"].dropna().unique().tolist()), key="f_pay")
+        with f3: sel_brand = st.selectbox("Filter by Brand", ["All"] + sorted(df["Brand"].dropna().unique().tolist()), key="f_brand")
+        with f4: sel_cat = st.selectbox("Filter by Category", ["All"] + sorted(df["Category"].dropna().unique().tolist()), key="f_cat")
+        with f5: sel_item = st.selectbox("Filter by Item", ["All"] + sorted(df["Item"].dropna().unique().tolist()), key="f_item")
+
+        # Date Range နှင့် ခလုတ်များ
+        with st.container(border=True):
+            h_col1, h_col2, h_col3, h_col4, h_col5, h_col6 = st.columns([1, 1, 1, 1, 1, 1])
+            h_start = h_col1.date_input("Start Date", value=date.today(), key="h_start_val")
+            h_end = h_col2.date_input("End Date", value=date.today(), key="h_end_val")
         
-        if st.button("Confirm Delete", type="primary", use_container_width=True):
-            if confirm_pw == st.session_state.get("password", "123456"):
-                all_df = conn.read(ttl=60)
-                # ရွေးထားသော Original_Index များကို ဖယ်ထုတ်ပါ
-                indices_to_drop = [int(idx) for idx in selected_df["Original_Index"].tolist()]
-                all_df = all_df.drop(indices_to_drop)
+            h_col3.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
+            history_search = h_col3.button("🔍 Search", use_container_width=True, type="primary")    
+
+            h_col4.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
+            edit_btn = h_col4.button("📝 Edit", use_container_width=True, type="secondary") 
+
+            h_col5.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
+            print_btn = h_col5.button("🖨 Print", use_container_width=True, type="primary")
+
+            h_col6.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
+            delete_btn = h_col6.button("🗑 Delete", use_container_width=True, type="secondary")
+
+        # Filter Logic
+        h_df = df.copy()
+        if history_search:
+            mask = (h_df["Date"] >= h_start) & (h_df["Date"] <= h_end)
+            h_df = h_df.loc[mask]
+
+        if sel_cus != "All": h_df = h_df[h_df["Customer"] == sel_cus]
+        if sel_pay != "All": h_df = h_df[h_df["Payment"] == sel_pay]
+        if sel_brand != "All": h_df = h_df[h_df["Brand"] == sel_brand]
+        if sel_cat != "All": h_df = h_df[h_df["Category"] == sel_cat]
+        if sel_item != "All": h_df = h_df[h_df["Item"] == sel_item]
+
+        # Data Editor (ရွေးချယ်နိုင်သော ဇယား)
+        # Original_Index သည် Google Sheet ထဲရှိ row order ကို ထိန်းထားသည်။
+        if "Original_Index" not in h_df.columns:
+            h_df["Original_Index"] = h_df.index
+        h_df = h_df.sort_values(by="Original_Index", ascending=False).reset_index(drop=True)
+        display_df = h_df.copy()
+        display_df.insert(0, "Select", False)
+    
+        t_key = f"hist_table_{st.session_state.get('table_key', 0)}"
+        edited_df = st.data_editor(
+            display_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Select": st.column_config.CheckboxColumn("Select", default=False),
+                "Original_Index": None # User ကို မပြပါ
+            },
+            key=t_key
+        )
+
+        # LL_1 >>> EDIT DIALOG (Cloud Version) -----
+        @st.dialog("📝 Edit Transaction Record")
+        def edit_transaction_dialog(row_data, original_idx):
+            target_idx = int(original_idx)
+            target_item = str(row_data["Item"])
+
+            st.write(f"Editing Item: {target_item}")
+
+            current_date = pd.to_datetime(row_data["Date"]).date()
+            current_customer = str(row_data.get("Customer", "-"))
+            current_payment = str(row_data.get("Payment", "Cash"))
+            current_pq = float(row_data.get("Purchase Qty", 0) or 0)
+            current_pp = float(row_data.get("Pur Price", 0) or 0)
+            current_sq = float(row_data.get("Sale Qty", 0) or 0)
+            current_sp = float(row_data.get("Sale Price", 0) or 0)
+
+            customer_list = sorted([str(x) for x in df["Customer"].dropna().unique().tolist()])
+            payment_list = sorted([str(x) for x in df["Payment"].dropna().unique().tolist()])
+            if current_customer not in customer_list:
+                customer_list.insert(0, current_customer)
+            if current_payment not in payment_list:
+                payment_list.insert(0, current_payment)
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                new_date = st.date_input("Date", value=current_date, key=f"edit_date_{target_idx}")
+            with col2:
+                new_customer = st.selectbox(
+                    "Customer",
+                    options=customer_list,
+                    index=customer_list.index(current_customer) if current_customer in customer_list else 0,
+                    key=f"edit_customer_{target_idx}"
+                )
+            with col3:
+                new_payment = st.selectbox(
+                    "Payment",
+                    options=payment_list,
+                    index=payment_list.index(current_payment) if current_payment in payment_list else 0,
+                    key=f"edit_payment_{target_idx}"
+                )
+
+            st.markdown("### Item Info")
+            i1, i2, i3 = st.columns(3)
+            with i1:
+                st.text_input("Brand", value=str(row_data["Brand"]), disabled=True, key=f"edit_brand_{target_idx}")
+            with i2:
+                st.text_input("Category", value=str(row_data["Category"]), disabled=True, key=f"edit_cat_{target_idx}")
+            with i3:
+                st.text_input("Item", value=target_item, disabled=True, key=f"edit_item_{target_idx}")
+
+            st.markdown("---")
+            q1, q2 = st.columns(2)
+            with q1:
+                new_p_qty = st.number_input(
+                    "Purchase Qty",
+                    min_value=0.0,
+                    value=current_pq,
+                    step=1.0,
+                    key=f"edit_pq_{target_idx}"
+                )
+                new_p_price = st.number_input(
+                    "Purchase Price",
+                    min_value=0.0,
+                    value=current_pp,
+                    step=1.0,
+                    key=f"edit_pp_{target_idx}"
+                )
+            with q2:
+                new_s_qty = st.number_input(
+                    "Sale Qty",
+                    min_value=0.0,
+                    value=current_sq,
+                    step=1.0,
+                    key=f"edit_sq_{target_idx}"
+                )
+                new_s_price = st.number_input(
+                    "Sale Price",
+                    min_value=0.0,
+                    value=current_sp,
+                    step=1.0,
+                    key=f"edit_sp_{target_idx}"
+                )
+
+            st.markdown("---")
+            if st.button("Confirm Update", type="primary", use_container_width=True, key=f"confirm_update_{target_idx}"):
+                try:
+                    all_df = conn.read(ttl=60)
+
+                    all_df.loc[target_idx, "Date"] = new_date
+                    all_df.loc[target_idx, "Customer"] = new_customer
+                    all_df.loc[target_idx, "Payment"] = new_payment
+                    all_df.loc[target_idx, "Purchase Qty"] = float(new_p_qty)
+                    all_df.loc[target_idx, "Pur Price"] = float(new_p_price)
+                    all_df.loc[target_idx, "Sale Qty"] = float(new_s_qty)
+                    all_df.loc[target_idx, "Sale Price"] = float(new_s_price)
+
+                    all_df = recalculate_items_in_df(all_df, [target_item])
+                    conn.update(data=all_df)
+                    clear_data_cache()
+
+                    st.success("Transaction Updated Successfully")
+                    st.session_state.table_key = st.session_state.get("table_key", 0) + 1
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Update Error: {e}")
+
+        # LL_2 >>> DELETE DIALOG (Cloud Version) -----
+        @st.dialog("⚠️ Confirm Delete")
+        def delete_confirmation_dialog(selected_df):
+            st.warning(f"Delete {len(selected_df)} selected records?")
+            confirm_pw = st.text_input("Admin Password", type="password")
+        
+            if st.button("Confirm Delete", type="primary", use_container_width=True):
+                if confirm_pw == st.session_state.get("password", "123456"):
+                    all_df = conn.read(ttl=60)
+                    # ရွေးထားသော Original_Index များကို ဖယ်ထုတ်ပါ
+                    indices_to_drop = [int(idx) for idx in selected_df["Original_Index"].tolist()]
+                    all_df = all_df.drop(indices_to_drop)
                 
-                affected_items = [item for item in selected_df["Item"].unique() if item != "-"]
-                all_df = recalculate_items_in_df(all_df, affected_items)
-                conn.update(data=all_df)
-                clear_data_cache()
+                    affected_items = [item for item in selected_df["Item"].unique() if item != "-"]
+                    all_df = recalculate_items_in_df(all_df, affected_items)
+                    conn.update(data=all_df)
+                    clear_data_cache()
                 
-                st.success("Deleted Successfully!")
-                st.rerun()
+                    st.success("Deleted Successfully!")
+                    st.rerun()
+                else:
+                    st.error("Wrong Password")
+
+        # MM_1, 2, 3 Logic
+        if edit_btn:
+            selected_to_edit = edited_df[edited_df["Select"] == True]
+            if len(selected_to_edit) == 1:
+                edit_transaction_dialog(selected_to_edit.iloc[0], selected_to_edit.iloc[0]["Original_Index"])
             else:
-                st.error("Wrong Password")
+                st.warning("Please select exactly one record to edit.")
 
-    # MM_1, 2, 3 Logic
-    if edit_btn:
-        selected_to_edit = edited_df[edited_df["Select"] == True]
-        if len(selected_to_edit) == 1:
-            edit_transaction_dialog(selected_to_edit.iloc[0], selected_to_edit.iloc[0]["Original_Index"])
-        else:
-            st.warning("Please select exactly one record to edit.")
+        if delete_btn:
+            selected_to_delete = edited_df[edited_df["Select"] == True]
+            if not selected_to_delete.empty:
+                delete_confirmation_dialog(selected_to_delete)
+            else:
+                st.warning("Select transactions to delete.")
 
-    if delete_btn:
-        selected_to_delete = edited_df[edited_df["Select"] == True]
-        if not selected_to_delete.empty:
-            delete_confirmation_dialog(selected_to_delete)
-        else:
-            st.warning("Select transactions to delete.")
+        if print_btn:
+            # သင်၏ မူရင်း Print Logic အတိုင်း ဆက်လက်အသုံးပြုနိုင်ပါသည်
+            selected_rows = edited_df[edited_df["Select"] == True]
+            if not selected_rows.empty:
+                cust_name = str(selected_rows.iloc[0]['Customer'])
+                items_to_print = []
+                grand_total = 0
+                for _, row in selected_rows.iterrows():
+                    if row['Sale Qty'] > 0:
+                        amount = row['Sale Qty'] * row['Sale Price']
+                        items_to_print.append({"name": f"{row['Brand']} {row['Item']}", "qty": row['Sale Qty'], "price": row['Sale Price'], "amount": amount})
+                        grand_total += amount
+                show_receipt_ui(cust_name, items_to_print, grand_total)
 
-    if print_btn:
-        # သင်၏ မူရင်း Print Logic အတိုင်း ဆက်လက်အသုံးပြုနိုင်ပါသည်
-        selected_rows = edited_df[edited_df["Select"] == True]
-        if not selected_rows.empty:
-            cust_name = str(selected_rows.iloc[0]['Customer'])
-            items_to_print = []
-            grand_total = 0
-            for _, row in selected_rows.iterrows():
-                if row['Sale Qty'] > 0:
-                    amount = row['Sale Qty'] * row['Sale Price']
-                    items_to_print.append({"name": f"{row['Brand']} {row['Item']}", "qty": row['Sale Qty'], "price": row['Sale Price'], "amount": amount})
-                    grand_total += amount
-            show_receipt_ui(cust_name, items_to_print, grand_total)
-
-else:
-    st.info("No transaction history found.")
+    else:
+        st.info("No transaction history found.")
