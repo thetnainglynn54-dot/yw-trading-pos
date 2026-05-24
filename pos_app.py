@@ -208,6 +208,45 @@ st.markdown("""
             color: #f59e0b !important;
             background: #fff7ed;
         }
+        div[data-testid="stVerticalBlock"] > div:has(.mobile-nav-marker) + div[data-testid="stHorizontalBlock"] {
+            position: fixed;
+            left: 0.75rem;
+            right: 0.75rem;
+            bottom: 0.75rem;
+            z-index: 999999;
+            display: grid !important;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.35rem;
+            padding: 0.65rem 0.5rem;
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid #e5e7eb;
+            border-radius: 22px;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, 0.16);
+            backdrop-filter: blur(10px);
+        }
+        div[data-testid="stVerticalBlock"] > div:has(.mobile-nav-marker) + div[data-testid="stHorizontalBlock"] [data-testid="column"] {
+            width: auto !important;
+            flex: 1 1 0 !important;
+        }
+        div[data-testid="stVerticalBlock"] > div:has(.mobile-nav-marker) + div[data-testid="stHorizontalBlock"] button {
+            min-height: 3.25rem !important;
+            border-radius: 14px !important;
+            white-space: pre-line !important;
+            font-size: 0.78rem !important;
+            font-weight: 700 !important;
+            line-height: 1.15 !important;
+            padding: 0.25rem !important;
+        }
+        div[data-testid="stVerticalBlock"] > div:has(.mobile-nav-marker) + div[data-testid="stHorizontalBlock"] button[kind="secondary"] {
+            background: #ffffff !important;
+            border-color: transparent !important;
+            color: #6b7280 !important;
+        }
+        div[data-testid="stVerticalBlock"] > div:has(.mobile-nav-marker) + div[data-testid="stHorizontalBlock"] button[kind="primary"] {
+            background: #fff7ed !important;
+            border-color: #fed7aa !important;
+            color: #f59e0b !important;
+        }
     }
     @media (min-width: 641px) {
         .mobile-app-title {
@@ -605,24 +644,30 @@ with st.sidebar:
         st.rerun()
 
 valid_mobile_pages = {"dashboard", "new", "history"}
-mobile_page = st.query_params.get("mobile_page", "")
-if isinstance(mobile_page, list):
-    mobile_page = mobile_page[0] if mobile_page else ""
+if "mobile_page" not in st.session_state:
+    st.session_state.mobile_page = "dashboard"
+if st.session_state.mobile_page not in valid_mobile_pages:
+    st.session_state.mobile_page = "dashboard"
 
-show_all_sections = mobile_page not in valid_mobile_pages
-show_dashboard = show_all_sections or mobile_page == "dashboard"
-show_new_transaction = show_all_sections or mobile_page == "new"
-show_history = show_all_sections or mobile_page == "history"
-active_nav = mobile_page if mobile_page in valid_mobile_pages else "dashboard"
+st.markdown('<div class="mobile-app-title">YW Trading POS</div>', unsafe_allow_html=True)
+st.markdown('<div class="mobile-nav-marker"></div>', unsafe_allow_html=True)
+nav_dash, nav_new, nav_history = st.columns(3)
+with nav_dash:
+    if st.button("D\nDashboard", key="mobile_nav_dashboard", use_container_width=True, type="primary" if st.session_state.mobile_page == "dashboard" else "secondary"):
+        st.session_state.mobile_page = "dashboard"
+        st.rerun()
+with nav_new:
+    if st.button("+\nNew", key="mobile_nav_new", use_container_width=True, type="primary" if st.session_state.mobile_page == "new" else "secondary"):
+        st.session_state.mobile_page = "new"
+        st.rerun()
+with nav_history:
+    if st.button("H\nHistory", key="mobile_nav_history", use_container_width=True, type="primary" if st.session_state.mobile_page == "history" else "secondary"):
+        st.session_state.mobile_page = "history"
+        st.rerun()
 
-st.markdown(f"""
-    <div class="mobile-app-title">YW Trading POS</div>
-    <nav class="mobile-bottom-nav" aria-label="Mobile bottom navigation">
-        <a class="{'active' if active_nav == 'dashboard' else ''}" href="?mobile_page=dashboard"><span>D</span>Dashboard</a>
-        <a class="{'active' if active_nav == 'new' else ''}" href="?mobile_page=new"><span>+</span>New</a>
-        <a class="{'active' if active_nav == 'history' else ''}" href="?mobile_page=history"><span>H</span>History</a>
-    </nav>
-""", unsafe_allow_html=True)
+show_dashboard = st.session_state.mobile_page == "dashboard"
+show_new_transaction = st.session_state.mobile_page == "new"
+show_history = st.session_state.mobile_page == "history"
 
 
 if show_dashboard:
