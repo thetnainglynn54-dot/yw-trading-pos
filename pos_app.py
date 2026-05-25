@@ -808,11 +808,6 @@ st.components.v1.html("""
     return labelNode ? labelNode.closest('div[data-testid="stHorizontalBlock"]') : null;
   }
 
-  function fieldContainer(label) {
-    const labelNode = findText(label);
-    return labelNode ? labelNode.closest("div.element-container") : null;
-  }
-
   function clearPhoneGrid(block) {
     if (!block) return;
     block.style.removeProperty("display");
@@ -821,7 +816,6 @@ st.components.v1.html("""
     block.querySelectorAll('[data-testid="column"], div.element-container').forEach((node) => {
       node.style.removeProperty("display");
       node.style.removeProperty("grid-column");
-      node.style.removeProperty("grid-row");
       node.style.removeProperty("width");
       node.style.removeProperty("flex");
     });
@@ -864,31 +858,6 @@ st.components.v1.html("""
         clearPhoneGrid(block);
       }
     });
-
-    if (isMobile) {
-      const purchaseBlock = horizontalBlockFor("Purchase Qty");
-      const positions = [
-        ["Purchase Qty", 1, 1],
-        ["Sale Qty", 1, 2],
-        ["Purchase Price (THB)", 2, 1],
-        ["Sale Price (THB)", 2, 2],
-        ["Other Income", 3, 1],
-        ["Expense", 3, 2],
-      ];
-      positions.forEach(([label, row, column]) => {
-        const item = fieldContainer(label);
-        if (!item || !purchaseBlock) return;
-        purchaseBlock.appendChild(item);
-        purchaseBlock.style.setProperty("display", "grid", "important");
-        purchaseBlock.style.setProperty("grid-template-columns", "minmax(0, 1fr) minmax(0, 1fr)", "important");
-        purchaseBlock.style.setProperty("gap", "0.65rem", "important");
-        item.style.setProperty("grid-row", String(row), "important");
-        item.style.setProperty("grid-column", String(column), "important");
-        item.style.setProperty("display", "block", "important");
-        item.style.setProperty("width", "100%", "important");
-        item.style.setProperty("min-width", "0", "important");
-      });
-    }
   }
 
   function applyMode() {
