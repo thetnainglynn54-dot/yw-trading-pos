@@ -798,6 +798,68 @@ st.components.v1.html("""
     });
   }
 
+  function findText(text) {
+    return Array.from(doc.querySelectorAll("p, label, span, div"))
+      .find((node) => (node.textContent || "").trim() === text);
+  }
+
+  function horizontalBlockFor(label) {
+    const labelNode = findText(label);
+    return labelNode ? labelNode.closest('div[data-testid="stHorizontalBlock"]') : null;
+  }
+
+  function clearPhoneGrid(block) {
+    if (!block) return;
+    block.style.removeProperty("display");
+    block.style.removeProperty("grid-template-columns");
+    block.style.removeProperty("gap");
+    block.querySelectorAll('[data-testid="column"], div.element-container').forEach((node) => {
+      node.style.removeProperty("display");
+      node.style.removeProperty("grid-column");
+      node.style.removeProperty("width");
+      node.style.removeProperty("flex");
+    });
+  }
+
+  function makePhoneGrid(block) {
+    if (!block) return;
+    block.style.setProperty("display", "grid", "important");
+    block.style.setProperty("grid-template-columns", "minmax(0, 1fr) minmax(0, 1fr)", "important");
+    block.style.setProperty("gap", "0.65rem", "important");
+    block.querySelectorAll('[data-testid="column"]').forEach((column) => {
+      column.style.setProperty("display", "contents", "important");
+      column.style.setProperty("width", "auto", "important");
+      column.style.setProperty("flex", "initial", "important");
+    });
+    block.querySelectorAll("div.element-container").forEach((element) => {
+      const text = (element.textContent || "").trim();
+      const hasButton = !!element.querySelector("button");
+      const isSpacer = !text && element.querySelector('[style*="margin-top"]');
+      if (isSpacer) {
+        element.style.setProperty("display", "none", "important");
+      }
+      if (hasButton) {
+        element.style.setProperty("grid-column", "1 / -1", "important");
+      }
+    });
+  }
+
+  function applyPhoneFieldRows(isMobile) {
+    const blocks = [
+      horizontalBlockFor("Dash Start Date"),
+      horizontalBlockFor("Purchase Qty"),
+      horizontalBlockFor("Start Date")
+    ].filter(Boolean);
+
+    blocks.forEach((block) => {
+      if (isMobile) {
+        makePhoneGrid(block);
+      } else {
+        clearPhoneGrid(block);
+      }
+    });
+  }
+
   function applyMode() {
     const isMobile = window.parent.matchMedia("(max-width: 640px)").matches;
     const nav = ensureNav();
@@ -807,6 +869,7 @@ st.components.v1.html("""
     pages.forEach((page) => {
       setVisible(sectionElements(page), !isMobile || page === activePage);
     });
+    applyPhoneFieldRows(isMobile);
   }
 
   installStyle();
@@ -815,6 +878,7 @@ st.components.v1.html("""
   window.parent.addEventListener("resize", applyMode);
   setTimeout(applyMode, 500);
   setTimeout(applyMode, 1500);
+  setTimeout(applyMode, 3000);
 })();
 </script>
 """, height=0)
