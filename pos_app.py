@@ -821,6 +821,7 @@ st.components.v1.html("""
     block.querySelectorAll('[data-testid="column"], div.element-container').forEach((node) => {
       node.style.removeProperty("display");
       node.style.removeProperty("grid-column");
+      node.style.removeProperty("grid-row");
       node.style.removeProperty("width");
       node.style.removeProperty("flex");
     });
@@ -864,37 +865,23 @@ st.components.v1.html("""
       }
     });
 
-    const income = fieldContainer("Other Income");
-    const expense = fieldContainer("Expense");
-    if (income && expense) {
-      const parent =
-        income.parentElement === expense.parentElement
-          ? income.parentElement
-          : income.closest('[data-testid="column"]') || income.parentElement;
-      if (isMobile) {
-        parent.style.setProperty("display", "grid", "important");
-        parent.style.setProperty("grid-template-columns", "minmax(0, 1fr) minmax(0, 1fr)", "important");
-        parent.style.setProperty("gap", "0.65rem", "important");
-        parent.style.setProperty("align-items", "end", "important");
-        [income, expense].forEach((item) => {
-          parent.appendChild(item);
-          item.style.setProperty("display", "block", "important");
-          item.style.setProperty("width", "100%", "important");
-          item.style.setProperty("min-width", "0", "important");
-          item.style.setProperty("grid-column", "auto", "important");
-        });
-      } else {
-        parent.style.removeProperty("display");
-        parent.style.removeProperty("grid-template-columns");
-        parent.style.removeProperty("gap");
-        parent.style.removeProperty("align-items");
-        [income, expense].forEach((item) => {
-          item.style.removeProperty("display");
-          item.style.removeProperty("width");
-          item.style.removeProperty("min-width");
-          item.style.removeProperty("grid-column");
-        });
-      }
+    if (isMobile) {
+      const positions = [
+        ["Purchase Qty", 1, 1],
+        ["Sale Qty", 1, 2],
+        ["Purchase Price (THB)", 2, 1],
+        ["Sale Price (THB)", 2, 2],
+        ["Other Income", 3, 1],
+        ["Expense", 3, 2],
+      ];
+      positions.forEach(([label, row, column]) => {
+        const item = fieldContainer(label);
+        if (!item) return;
+        item.style.setProperty("grid-row", String(row), "important");
+        item.style.setProperty("grid-column", String(column), "important");
+        item.style.setProperty("width", "100%", "important");
+        item.style.setProperty("min-width", "0", "important");
+      });
     }
   }
 
