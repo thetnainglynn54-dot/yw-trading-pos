@@ -803,61 +803,74 @@ st.components.v1.html("""
       .find((node) => (node.textContent || "").trim() === text);
   }
 
-  function horizontalBlockFor(label) {
+  function fieldContainer(label) {
     const labelNode = findText(label);
-    return labelNode ? labelNode.closest('div[data-testid="stHorizontalBlock"]') : null;
+    return labelNode ? labelNode.closest("div.element-container") : null;
   }
 
-  function clearPhoneGrid(block) {
-    if (!block) return;
-    block.style.removeProperty("display");
-    block.style.removeProperty("grid-template-columns");
-    block.style.removeProperty("gap");
-    block.querySelectorAll('[data-testid="column"], div.element-container').forEach((node) => {
+  function resetPhoneArrangement() {
+    doc.querySelectorAll("[data-yw-phone-grid]").forEach((node) => {
+      node.removeAttribute("data-yw-phone-grid");
+      node.style.removeProperty("display");
+      node.style.removeProperty("grid-template-columns");
+      node.style.removeProperty("gap");
+      node.style.removeProperty("align-items");
+    });
+    doc.querySelectorAll("[data-yw-phone-item]").forEach((node) => {
+      node.removeAttribute("data-yw-phone-item");
       node.style.removeProperty("display");
       node.style.removeProperty("grid-column");
       node.style.removeProperty("width");
-      node.style.removeProperty("flex");
+      node.style.removeProperty("min-width");
     });
   }
 
-  function makePhoneGrid(block) {
-    if (!block) return;
-    block.style.setProperty("display", "grid", "important");
-    block.style.setProperty("grid-template-columns", "minmax(0, 1fr) minmax(0, 1fr)", "important");
-    block.style.setProperty("gap", "0.65rem", "important");
-    block.querySelectorAll('[data-testid="column"]').forEach((column) => {
-      column.style.setProperty("display", "contents", "important");
-      column.style.setProperty("width", "auto", "important");
-      column.style.setProperty("flex", "initial", "important");
-    });
-    block.querySelectorAll("div.element-container").forEach((element) => {
-      const text = (element.textContent || "").trim();
-      const hasButton = !!element.querySelector("button");
-      const isSpacer = !text && element.querySelector('[style*="margin-top"]');
-      if (isSpacer) {
-        element.style.setProperty("display", "none", "important");
-      }
-      if (hasButton) {
-        element.style.setProperty("grid-column", "1 / -1", "important");
-      }
+  function makeGrid(items, columns) {
+    const present = items.filter(Boolean);
+    if (!present.length) return;
+    const parent = present[0].parentElement;
+    if (!parent) return;
+    parent.setAttribute("data-yw-phone-grid", "true");
+    parent.style.setProperty("display", "grid", "important");
+    parent.style.setProperty(
+      "grid-template-columns",
+      `repeat(${columns}, minmax(0, 1fr))`,
+      "important"
+    );
+    parent.style.setProperty("gap", "0.65rem", "important");
+    parent.style.setProperty("align-items", "end", "important");
+    present.forEach((item) => {
+      item.setAttribute("data-yw-phone-item", "true");
+      item.style.setProperty("display", "block", "important");
+      item.style.setProperty("width", "100%", "important");
+      item.style.setProperty("min-width", "0", "important");
     });
   }
 
   function applyPhoneFieldRows(isMobile) {
-    const blocks = [
-      horizontalBlockFor("Dash Start Date"),
-      horizontalBlockFor("Purchase Qty"),
-      horizontalBlockFor("Start Date")
-    ].filter(Boolean);
+    resetPhoneArrangement();
+    if (!isMobile) return;
 
-    blocks.forEach((block) => {
-      if (isMobile) {
-        makePhoneGrid(block);
-      } else {
-        clearPhoneGrid(block);
-      }
-    });
+    makeGrid([
+      fieldContainer("Dash Start Date"),
+      fieldContainer("Dash End Date"),
+      Array.from(doc.querySelectorAll("button")).find((button) =>
+        (button.textContent || "").includes("Search Dash")
+      )?.closest("div.element-container")
+    ], 3);
+
+    makeGrid([fieldContainer("Purchase Qty"), fieldContainer("Purchase Price (THB)")], 2);
+    makeGrid([fieldContainer("Sale Qty"), fieldContainer("Sale Price (THB)")], 2);
+    makeGrid([fieldContainer("Other Income"), fieldContainer("Expense")], 2);
+
+    makeGrid([
+      fieldContainer("Start Date"),
+      fieldContainer("End Date"),
+      Array.from(doc.querySelectorAll("button")).find((button) =>
+        (button.textContent || "").trim().includes("Search") &&
+        !(button.textContent || "").includes("Dash")
+      )?.closest("div.element-container")
+    ].filter(Boolean), 2);
   }
 
   function applyMode() {
