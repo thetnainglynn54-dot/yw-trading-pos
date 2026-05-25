@@ -808,6 +808,11 @@ st.components.v1.html("""
     return labelNode ? labelNode.closest('div[data-testid="stHorizontalBlock"]') : null;
   }
 
+  function fieldContainer(label) {
+    const labelNode = findText(label);
+    return labelNode ? labelNode.closest("div.element-container") : null;
+  }
+
   function clearPhoneGrid(block) {
     if (!block) return;
     block.style.removeProperty("display");
@@ -858,6 +863,31 @@ st.components.v1.html("""
         clearPhoneGrid(block);
       }
     });
+
+    const income = fieldContainer("Other Income");
+    const expense = fieldContainer("Expense");
+    if (income && expense && income.parentElement === expense.parentElement) {
+      const parent = income.parentElement;
+      if (isMobile) {
+        parent.style.setProperty("display", "grid", "important");
+        parent.style.setProperty("grid-template-columns", "minmax(0, 1fr) minmax(0, 1fr)", "important");
+        parent.style.setProperty("gap", "0.65rem", "important");
+        [income, expense].forEach((item) => {
+          item.style.setProperty("display", "block", "important");
+          item.style.setProperty("width", "100%", "important");
+          item.style.setProperty("min-width", "0", "important");
+        });
+      } else {
+        parent.style.removeProperty("display");
+        parent.style.removeProperty("grid-template-columns");
+        parent.style.removeProperty("gap");
+        [income, expense].forEach((item) => {
+          item.style.removeProperty("display");
+          item.style.removeProperty("width");
+          item.style.removeProperty("min-width");
+        });
+      }
+    }
   }
 
   function applyMode() {
