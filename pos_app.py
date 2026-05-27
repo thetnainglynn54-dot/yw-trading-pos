@@ -73,6 +73,20 @@ def recalculate_items_in_df(all_df, items):
             p_qty = float(all_df.at[idx, "Purchase Qty"] or 0)
             s_qty = float(all_df.at[idx, "Sale Qty"] or 0)
             p_pr = float(all_df.at[idx, "Pur Price"] or 0)
+            existing_stock = float(all_df.at[idx, "Stock"] or 0)
+            existing_balance = float(all_df.at[idx, "Balance"] or 0)
+
+            # Rows entered directly in Google Sheets can represent opening stock.
+            # Keep that stock as the running balance when no purchase/sale happened.
+            if p_qty == 0 and s_qty == 0 and existing_stock > 0:
+                all_df.at[idx, "Before Amt"] = running_stock
+                all_df.at[idx, "Stock"] = existing_stock
+                if p_pr > 0:
+                    all_df.at[idx, "Balance"] = existing_stock * p_pr
+                else:
+                    all_df.at[idx, "Balance"] = existing_balance
+                running_stock = existing_stock
+                continue
 
             before_amt = running_stock
             after_stock = max((before_amt + p_qty) - s_qty, 0)
