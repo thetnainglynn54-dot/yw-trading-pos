@@ -1220,9 +1220,8 @@ if not df.empty:
 
     # Filter Logic
     h_df = df.copy()
-    if history_search:
-        mask = (h_df["Date"] >= h_start) & (h_df["Date"] <= h_end)
-        h_df = h_df.loc[mask]
+    mask = (h_df["Date"] >= h_start) & (h_df["Date"] <= h_end)
+    h_df = h_df.loc[mask]
 
     if sel_cus != "All": h_df = h_df[h_df["Customer"] == sel_cus]
     if sel_pay != "All": h_df = h_df[h_df["Payment"] == sel_pay]
@@ -1338,7 +1337,7 @@ if not df.empty:
             try:
                 all_df = conn.read(ttl=60)
 
-                all_df.loc[target_idx, "Date"] = new_date
+                all_df.loc[target_idx, "Date"] = as_sheet_value(new_date)
                 all_df.loc[target_idx, "Customer"] = new_customer
                 all_df.loc[target_idx, "Payment"] = new_payment
                 all_df.loc[target_idx, "Purchase Qty"] = float(new_p_qty)
