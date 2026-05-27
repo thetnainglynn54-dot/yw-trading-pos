@@ -1232,6 +1232,33 @@ if not df.empty:
     if sel_cat != "All": h_df = h_df[h_df["Category"] == sel_cat]
     if sel_item != "All": h_df = h_df[h_df["Item"] == sel_item]
 
+    summary_df = h_df.copy()
+    for total_col in ["Purchase Qty", "Pur Price", "Sale Qty", "Sale Price"]:
+        summary_df[total_col] = pd.to_numeric(summary_df[total_col], errors="coerce").fillna(0.0)
+
+    filtered_total_sales = (summary_df["Sale Qty"] * summary_df["Sale Price"]).sum()
+    filtered_total_purchases = (summary_df["Purchase Qty"] * summary_df["Pur Price"]).sum()
+
+    sum_col1, sum_col2 = st.columns(2)
+    with sum_col1:
+        st.markdown(
+            f"""
+            <div style="border-left: 4px solid #ff4b4b; background: #f8fafc; padding: 12px 14px; border-radius: 8px; font-weight: 700;">
+                📊 Filtered Total Sales: <span style="color:#ff4b4b;">{filtered_total_sales:,.0f} THB</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with sum_col2:
+        st.markdown(
+            f"""
+            <div style="border-left: 4px solid #0ea5e9; background: #f8fafc; padding: 12px 14px; border-radius: 8px; font-weight: 700;">
+                🛒 Filtered Total Purchases: <span style="color:#0b84f3;">{filtered_total_purchases:,.0f} THB</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
     # Data Editor (ရွေးချယ်နိုင်သော ဇယား)
     # Original_Index သည် Google Sheet ထဲရှိ row order ကို ထိန်းထားသည်။
     if "Original_Index" not in h_df.columns:
