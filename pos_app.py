@@ -75,10 +75,13 @@ def recalculate_items_in_df(all_df, items):
             p_pr = float(all_df.at[idx, "Pur Price"] or 0)
             existing_stock = float(all_df.at[idx, "Stock"] or 0)
             existing_balance = float(all_df.at[idx, "Balance"] or 0)
+            has_transaction_qty = (p_qty != 0 or s_qty != 0)
+            is_opening_stock_row = (not has_transaction_qty and existing_stock > 0)
 
-            # Rows entered directly in Google Sheets can represent opening stock.
-            # Keep that stock as the running balance when no purchase/sale happened.
-            if p_qty == 0 and s_qty == 0 and existing_stock > 0:
+            # Google Sheets တွင် Stock column ထဲကို တိုက်ရိုက်ထည့်ထားသော row များကို
+            # opening/manual stock balance အဖြစ်ထားပြီး rebuild/edit/delete လုပ်ချိန်တွင်
+            # zero မလုပ်မိအောင် ကာကွယ်ထားသည်။
+            if is_opening_stock_row:
                 all_df.at[idx, "Before Amt"] = running_stock
                 all_df.at[idx, "Stock"] = existing_stock
                 if p_pr > 0:
