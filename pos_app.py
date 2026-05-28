@@ -1266,12 +1266,14 @@ if not df.empty:
     h_df = h_df.sort_values(by="Original_Index", ascending=False).reset_index(drop=True)
     display_df = h_df.copy()
     display_df.insert(0, "Select", False)
+    read_only_cols = [col for col in display_df.columns if col != "Select"]
 
     t_key = f"hist_table_{st.session_state.get('table_key', 0)}"
     edited_df = st.data_editor(
         display_df,
         use_container_width=True,
         hide_index=True,
+        disabled=read_only_cols,
         column_config={
             "Select": st.column_config.CheckboxColumn("Select", default=False),
             "Original_Index": None # User ကို မပြပါ
