@@ -68,8 +68,15 @@ def recalculate_items_in_df(all_df, items):
 
         item_mask = all_df["Item"] == item_name
         running_stock = 0.0
+        item_indices = list(all_df.index[item_mask])
 
-        for idx in all_df.index[item_mask]:
+        def stock_recalc_sort_key(idx):
+            row_date = pd.to_datetime(all_df.at[idx, "Date"], errors="coerce")
+            if pd.isna(row_date):
+                row_date = pd.Timestamp.max
+            return (row_date, idx)
+
+        for idx in sorted(item_indices, key=stock_recalc_sort_key):
             p_qty = float(all_df.at[idx, "Purchase Qty"] or 0)
             s_qty = float(all_df.at[idx, "Sale Qty"] or 0)
             p_pr = float(all_df.at[idx, "Pur Price"] or 0)
