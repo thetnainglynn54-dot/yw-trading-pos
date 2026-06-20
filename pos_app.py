@@ -1,6 +1,8 @@
-import streamlit as st
+﻿import streamlit as st
 import pandas as pd
 import os
+import json
+import hashlib
 from datetime import datetime, date
 from streamlit_gsheets import GSheetsConnection
 
@@ -41,6 +43,93 @@ def update_admin_password(new_password):
 
     with open(secrets_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines).rstrip() + "\n")
+
+
+PERMISSIONS = {
+    "new_transaction": "Save new transactions",
+    "add_new_names": "Use + Add New fields",
+    "edit_history": "Edit transaction history",
+    "delete_history": "Delete transaction history",
+    "print_history": "Print receipts",
+    "edit_names": "Rename brand/category/item/customer/payment",
+    "rebuild_stocks": "Rebuild all stocks",
+    "view_stock_profit": "View stock balance and profit",
+}
+
+
+def users_file_path():
+    return os.path.join(os.path.dirname(__file__), ".streamlit", "users.json")
+
+
+def hash_password(password):
+    return hashlib.sha256(str(password).encode("utf-8")).hexdigest()
+
+
+def load_app_users():
+    path = users_file_path()
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def save_app_users(users):
+    path = users_file_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(users, f, indent=2, ensure_ascii=False)
+
+
+def is_admin_user():
+    return st.session_state.get("current_role") == "admin"
+
+
+def has_permission(permission):
+    if is_admin_user():
+        return True
+    return permission in st.session_state.get("user_permissions", [])
+
+
+def require_permission(permission):
+    if has_permission(permission):
+        return True
+    st.warning("You do not have permission for this action.")
+    return False
+
+
+def login_app_user(username, password):
+    username = str(username).strip()
+    if username == "admin":
+        try:
+            admin_password = st.secrets.get("admin_password", "123456")
+        except Exception:
+            admin_password = "123456"
+        if str(password) == str(admin_password):
+            return {
+                "username": "admin",
+                "role": "admin",
+                "permissions": list(PERMISSIONS.keys()),
+            }
+        return None
+
+    users = load_app_users()
+    user = users.get(username)
+    if not user or not user.get("active", True):
+        return None
+
+    stored_hash = user.get("password_hash", "")
+    if stored_hash != hash_password(password):
+        return None
+
+    return {
+        "username": username,
+        "role": "user",
+        "permissions": user.get("permissions", []),
+    }
 
 
 def get_worksheet():
@@ -85,9 +174,9 @@ def recalculate_items_in_df(all_df, items):
             has_transaction_qty = (p_qty != 0 or s_qty != 0)
             is_opening_stock_row = (not has_transaction_qty and existing_stock > 0)
 
-            # Google Sheets တွင် Stock column ထဲကို တိုက်ရိုက်ထည့်ထားသော row များကို
-            # opening/manual stock balance အဖြစ်ထားပြီး rebuild/edit/delete လုပ်ချိန်တွင်
-            # zero မလုပ်မိအောင် ကာကွယ်ထားသည်။
+            # Google Sheets á€á€½á€„á€º Stock column á€‘á€²á€€á€­á€¯ á€á€­á€¯á€€á€ºá€›á€­á€¯á€€á€ºá€‘á€Šá€·á€ºá€‘á€¬á€¸á€žá€±á€¬ row á€™á€»á€¬á€¸á€€á€­á€¯
+            # opening/manual stock balance á€¡á€–á€¼á€…á€ºá€‘á€¬á€¸á€•á€¼á€®á€¸ rebuild/edit/delete á€œá€¯á€•á€ºá€á€»á€­á€”á€ºá€á€½á€„á€º
+            # zero á€™á€œá€¯á€•á€ºá€™á€­á€¡á€±á€¬á€„á€º á€€á€¬á€€á€½á€šá€ºá€‘á€¬á€¸á€žá€Šá€ºá‹
             if is_opening_stock_row:
                 all_df.at[idx, "Before Amt"] = running_stock
                 all_df.at[idx, "Stock"] = existing_stock
@@ -111,16 +200,16 @@ def recalculate_items_in_df(all_df, items):
     return all_df
 
 
-# ၂။ Data ဖတ်ရန် function (SQLite အစား Cloud ကနေ ဖတ်မည်)
+# á‚á‹ Data á€–á€á€ºá€›á€”á€º function (SQLite á€¡á€…á€¬á€¸ Cloud á€€á€”á€± á€–á€á€ºá€™á€Šá€º)
 def load_data():
     try:
-        # ttl="0" သည် data ကို cache မလုပ်ဘဲ အမြဲ fresh ဖြစ်စေရန်ဖြစ်သည်
+        # ttl="0" á€žá€Šá€º data á€€á€­á€¯ cache á€™á€œá€¯á€•á€ºá€˜á€² á€¡á€™á€¼á€² fresh á€–á€¼á€…á€ºá€…á€±á€›á€”á€ºá€–á€¼á€…á€ºá€žá€Šá€º
         df = conn.read(ttl=60) 
         
         if df is not None and not df.empty:
-            # Date column ကို datetime format ပြောင်းခြင်း
+            # Date column á€€á€­á€¯ datetime format á€•á€¼á€±á€¬á€„á€ºá€¸á€á€¼á€„á€ºá€¸
             df['Date'] = pd.to_datetime(df['Date']).dt.date
-            # Date အလိုက် အသစ်ဆုံးကို အပေါ်ကပြရန် Sort လုပ်ခြင်း
+            # Date á€¡á€œá€­á€¯á€€á€º á€¡á€žá€…á€ºá€†á€¯á€¶á€¸á€€á€­á€¯ á€¡á€•á€±á€«á€ºá€€á€•á€¼á€›á€”á€º Sort á€œá€¯á€•á€ºá€á€¼á€„á€ºá€¸
             return df.sort_values(by=['Date'], ascending=[False])
         
         return pd.DataFrame()
@@ -136,17 +225,17 @@ try:
     st.set_page_config(layout="wide", page_title="YW Trading", page_icon=logo_url)
 except ImportError:
     st.set_page_config(layout="wide", page_title="YW Trading")
-    # Cloud ပေါ်မှာ Assets folder မပါရင် warning မပြဘဲ ငြိမ်နေစေချင်ရင် အောက်ကစာကြောင်းကို comment ပိတ်ထားနိုင်ပါတယ်
-    # st.warning("⚠️ Logo file NOT found")
+    # Cloud á€•á€±á€«á€ºá€™á€¾á€¬ Assets folder á€™á€•á€«á€›á€„á€º warning á€™á€•á€¼á€˜á€² á€„á€¼á€­á€™á€ºá€”á€±á€…á€±á€á€»á€„á€ºá€›á€„á€º á€¡á€±á€¬á€€á€ºá€€á€…á€¬á€€á€¼á€±á€¬á€„á€ºá€¸á€€á€­á€¯ comment á€•á€­á€á€ºá€‘á€¬á€¸á€”á€­á€¯á€„á€ºá€•á€«á€á€šá€º
+    # st.warning("âš ï¸ Logo file NOT found")
 
 # AA_2 >>> CSS -----
 st.markdown("""
     <style>
-    /* ၁။ App တစ်ခုလုံးရဲ့ Background ကို ဖြူစင်သောအရောင် ထားခြင်း */
+    /* áá‹ App á€á€…á€ºá€á€¯á€œá€¯á€¶á€¸á€›á€²á€· Background á€€á€­á€¯ á€–á€¼á€°á€…á€„á€ºá€žá€±á€¬á€¡á€›á€±á€¬á€„á€º á€‘á€¬á€¸á€á€¼á€„á€ºá€¸ */
     .stApp {
         background-color: #FFFFFF !important;
     }
-    /* Login ခလုတ်ကို အပြာရောင်ပြောင်းရန် */
+    /* Login á€á€œá€¯á€á€ºá€€á€­á€¯ á€¡á€•á€¼á€¬á€›á€±á€¬á€„á€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€›á€”á€º */
     div.stButton > button:first-child[kind="primary"] {
         background-color: #007bff !important;
         border-color: #007bff !important;
@@ -328,9 +417,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# AA_3 >>> Database Name (Cloud စနစ်တွင် မလိုအပ်တော့ပါ) -----
-# DB_NAME = "inventory_mgmt.db"  <-- ဒီစာကြောင်းကို ဖျက်လိုက်ပါ သို့မဟုတ် Comment ပိတ်ပါ
-# အစားထိုးရန် မလိုအပ်ပါ။ conn object ကိုသာ တိုက်ရိုက်သုံးပါမည်။
+# AA_3 >>> Database Name (Cloud á€…á€”á€…á€ºá€á€½á€„á€º á€™á€œá€­á€¯á€¡á€•á€ºá€á€±á€¬á€·á€•á€«) -----
+# DB_NAME = "inventory_mgmt.db"  <-- á€’á€®á€…á€¬á€€á€¼á€±á€¬á€„á€ºá€¸á€€á€­á€¯ á€–á€»á€€á€ºá€œá€­á€¯á€€á€ºá€•á€« á€žá€­á€¯á€·á€™á€Ÿá€¯á€á€º Comment á€•á€­á€á€ºá€•á€«
+# á€¡á€…á€¬á€¸á€‘á€­á€¯á€¸á€›á€”á€º á€™á€œá€­á€¯á€¡á€•á€ºá€•á€«á‹ conn object á€€á€­á€¯á€žá€¬ á€á€­á€¯á€€á€ºá€›á€­á€¯á€€á€ºá€žá€¯á€¶á€¸á€•á€«á€™á€Šá€ºá‹
 
 # AA_4 >>> LOGIN SESSION INITIALIZATION ------
 if "logged_in" not in st.session_state:
@@ -345,22 +434,31 @@ if "show_values" not in st.session_state:
 if "last_updated_item" not in st.session_state:
     st.session_state.last_updated_item = None
 
-# Input fields များအတွက် Session State များ
+# Input fields á€™á€»á€¬á€¸á€¡á€á€½á€€á€º Session State á€™á€»á€¬á€¸
 if "pp" not in st.session_state: st.session_state.pp = 0.0
 if "sp" not in st.session_state: st.session_state.sp = 0.0
 if "pq" not in st.session_state: st.session_state.pq = 0.0
 if "sq" not in st.session_state: st.session_state.sq = 0.0
 
-# Reset trigger (Input များ ရှင်းထုတ်ရန်)
+# Reset trigger (Input á€™á€»á€¬á€¸ á€›á€¾á€„á€ºá€¸á€‘á€¯á€á€ºá€›á€”á€º)
 if "reset_trigger" not in st.session_state:
     st.session_state.reset_trigger = False
+
+if "current_user" not in st.session_state:
+    st.session_state.current_user = None
+
+if "current_role" not in st.session_state:
+    st.session_state.current_role = None
+
+if "user_permissions" not in st.session_state:
+    st.session_state.user_permissions = []
 
 
 # BB_1 >>> LOGIN PAGE UI -----
 if not st.session_state.logged_in:
     st.markdown("<h2 style='text-align: center; color: #2e7d32;'>Inventory Login</h2>", unsafe_allow_html=True)
     
-    # Login Box ချိန်ညှိခြင်း -----
+    # Login Box á€á€»á€­á€”á€ºá€Šá€¾á€­á€á€¼á€„á€ºá€¸ -----
     _, col_login, _ = st.columns([1, 1.5, 1])
     with col_login:
         with st.container(border=True):
@@ -371,47 +469,51 @@ if not st.session_state.logged_in:
             
             if st.button("Log In", use_container_width=True, type="primary"):
 
-                # Password Format စစ်ဆေးခြင်း -----
+                # Password Format á€…á€…á€ºá€†á€±á€¸á€á€¼á€„á€ºá€¸ -----
                 if len(pass_input) == 6 and pass_input.isdigit():
+                    auth_user = login_app_user(user_input, pass_input)
                     
-                    # Google Sheets သုံးတဲ့အခါ Password ကို Sheet ထဲကနေ ဖတ်မယ့်အစား
-                    # Streamlit Secrets ထဲမှာ သိမ်းထားတာက ပိုလုံခြုံပါတယ်
-                    # ဒါမှမဟုတ် အောက်ကအတိုင်း ရိုးရိုးပဲ စစ်လိုက်လို့ ရပါတယ်
+                    # Google Sheets á€žá€¯á€¶á€¸á€á€²á€·á€¡á€á€« Password á€€á€­á€¯ Sheet á€‘á€²á€€á€”á€± á€–á€á€ºá€™á€šá€·á€ºá€¡á€…á€¬á€¸
+                    # Streamlit Secrets á€‘á€²á€™á€¾á€¬ á€žá€­á€™á€ºá€¸á€‘á€¬á€¸á€á€¬á€€ á€•á€­á€¯á€œá€¯á€¶á€á€¼á€¯á€¶á€•á€«á€á€šá€º
+                    # á€’á€«á€™á€¾á€™á€Ÿá€¯á€á€º á€¡á€±á€¬á€€á€ºá€€á€¡á€á€­á€¯á€„á€ºá€¸ á€›á€­á€¯á€¸á€›á€­á€¯á€¸á€•á€² á€…á€…á€ºá€œá€­á€¯á€€á€ºá€œá€­á€¯á€· á€›á€•á€«á€á€šá€º
                     
                     try:
-                        # နည်းလမ်း (၁) - Secrets ထဲမှာ 'admin_password' ဆိုပြီး သိမ်းထားရင် သုံးရန်
+                        # á€”á€Šá€ºá€¸á€œá€™á€ºá€¸ (á) - Secrets á€‘á€²á€™á€¾á€¬ 'admin_password' á€†á€­á€¯á€•á€¼á€®á€¸ á€žá€­á€™á€ºá€¸á€‘á€¬á€¸á€›á€„á€º á€žá€¯á€¶á€¸á€›á€”á€º
                         db_pass = st.secrets.get("admin_password", "123456") 
                     except:
-                        # Secrets မသတ်မှတ်ရသေးရင် Default သုံးရန်
+                        # Secrets á€™á€žá€á€ºá€™á€¾á€á€ºá€›á€žá€±á€¸á€›á€„á€º Default á€žá€¯á€¶á€¸á€›á€”á€º
                         db_pass = "123456"
 
-                    # Password တိုက်ဆိုင်စစ်ဆေးခြင်း -----
-                    if pass_input == db_pass:
+                    # Password á€á€­á€¯á€€á€ºá€†á€­á€¯á€„á€ºá€…á€…á€ºá€†á€±á€¸á€á€¼á€„á€ºá€¸ -----
+                    if auth_user:
                         st.session_state.logged_in = True
                         
-                        # Delete လုပ်ချိန်တွင် Password ပြန်စစ်ရန်အတွက် သိမ်းထားခြင်း
-                        st.session_state["password"] = pass_input 
+                        # Delete á€œá€¯á€•á€ºá€á€»á€­á€”á€ºá€á€½á€„á€º Password á€•á€¼á€”á€ºá€…á€…á€ºá€›á€”á€ºá€¡á€á€½á€€á€º á€žá€­á€™á€ºá€¸á€‘á€¬á€¸á€á€¼á€„á€ºá€¸
+                        st.session_state["password"] = pass_input
+                        st.session_state["current_user"] = auth_user["username"]
+                        st.session_state["current_role"] = auth_user["role"]
+                        st.session_state["user_permissions"] = auth_user["permissions"]
                         
                         st.success("Login Success")
                         st.rerun()
                     else:
                         st.error("Wrong Password")
                 else:
-                    st.warning("⚠️ Password must be 6 digits (0-9) only")
+                    st.warning("âš ï¸ Password must be 6 digits (0-9) only")
     st.stop()
 
 
 # CC_1 >>> Database Initialization (Cloud Version) -----
 def init_db():
     """
-    Google Sheets သုံးလျှင် Local SQLite Table များ ဆောက်ရန် မလိုတော့ပါ။
-    သို့သော် Code ထဲတွင် init_db() ခေါ်ထားပါက Error မတက်စေရန် 
-    Function ကို အလွတ် (Pass) အနေဖြင့် ထားရှိပါမည်။
+    Google Sheets á€žá€¯á€¶á€¸á€œá€»á€¾á€„á€º Local SQLite Table á€™á€»á€¬á€¸ á€†á€±á€¬á€€á€ºá€›á€”á€º á€™á€œá€­á€¯á€á€±á€¬á€·á€•á€«á‹
+    á€žá€­á€¯á€·á€žá€±á€¬á€º Code á€‘á€²á€á€½á€„á€º init_db() á€á€±á€«á€ºá€‘á€¬á€¸á€•á€«á€€ Error á€™á€á€€á€ºá€…á€±á€›á€”á€º 
+    Function á€€á€­á€¯ á€¡á€œá€½á€á€º (Pass) á€¡á€”á€±á€–á€¼á€„á€·á€º á€‘á€¬á€¸á€›á€¾á€­á€•á€«á€™á€Šá€ºá‹
     """
     pass
 
-# CC_2 >>> Stock ပြန်လည်တွက်ချက်သည့် Logic (Google Sheets Version) -----
-# (ဒီအပိုင်းက သင်ပို့ပေးထားတဲ့အတိုင်း အဆင်ပြေပါတယ်၊ ပြင်ရန်မလိုပါ)
+# CC_2 >>> Stock á€•á€¼á€”á€ºá€œá€Šá€ºá€á€½á€€á€ºá€á€»á€€á€ºá€žá€Šá€·á€º Logic (Google Sheets Version) -----
+# (á€’á€®á€¡á€•á€­á€¯á€„á€ºá€¸á€€ á€žá€„á€ºá€•á€­á€¯á€·á€•á€±á€¸á€‘á€¬á€¸á€á€²á€·á€¡á€á€­á€¯á€„á€ºá€¸ á€¡á€†á€„á€ºá€•á€¼á€±á€•á€«á€á€šá€ºáŠ á€•á€¼á€„á€ºá€›á€”á€ºá€™á€œá€­á€¯á€•á€«)
 def recalculate_inventory_logic(item_name):
     if not item_name or item_name == "-":
         return
@@ -455,81 +557,81 @@ def rebuild_all_stock():
     conn.update(data=all_df)
     clear_data_cache()
     
-    st.success("✅ Stock အားလုံးကို အောင်မြင်စွာ ပြန်လည်တွက်ချက်ပြီးပါပြီ။")
+    st.success("âœ… Stock á€¡á€¬á€¸á€œá€¯á€¶á€¸á€€á€­á€¯ á€¡á€±á€¬á€„á€ºá€™á€¼á€„á€ºá€…á€½á€¬ á€•á€¼á€”á€ºá€œá€Šá€ºá€á€½á€€á€ºá€á€»á€€á€ºá€•á€¼á€®á€¸á€•á€«á€•á€¼á€®á‹")
 
 
-# DD_1 >>> Google Sheets မှ Data ကို DataFrame အဖြစ် ဖတ်ယူခြင်း -----
+# DD_1 >>> Google Sheets á€™á€¾ Data á€€á€­á€¯ DataFrame á€¡á€–á€¼á€…á€º á€–á€á€ºá€šá€°á€á€¼á€„á€ºá€¸ -----
 def load_data():
     try:
-        # ၁။ Google Sheet မှ data ကို cache မလုပ်ဘဲ ဖတ်ယူပါ
+        # áá‹ Google Sheet á€™á€¾ data á€€á€­á€¯ cache á€™á€œá€¯á€•á€ºá€˜á€² á€–á€á€ºá€šá€°á€•á€«
         df = conn.read(ttl=60)
         
         if df is not None and not df.empty:
-            # ၂။ Column အမည်များ တူညီမှုရှိစေရန် သတ်မှတ်ခြင်း 
-            # (Google Sheet တွင် rowid မရှိသဖြင့် Index ကိုသာ ID အဖြစ် သုံးပါမည်)
-            # Column ပေါင်း ၁၅ ခု (ID မပါဘဲ)
+            # á‚á‹ Column á€¡á€™á€Šá€ºá€™á€»á€¬á€¸ á€á€°á€Šá€®á€™á€¾á€¯á€›á€¾á€­á€…á€±á€›á€”á€º á€žá€á€ºá€™á€¾á€á€ºá€á€¼á€„á€ºá€¸ 
+            # (Google Sheet á€á€½á€„á€º rowid á€™á€›á€¾á€­á€žá€–á€¼á€„á€·á€º Index á€€á€­á€¯á€žá€¬ ID á€¡á€–á€¼á€…á€º á€žá€¯á€¶á€¸á€•á€«á€™á€Šá€º)
+            # Column á€•á€±á€«á€„á€ºá€¸ áá… á€á€¯ (ID á€™á€•á€«á€˜á€²)
             expected_cols = ["Date", "Customer", "Payment", "Brand", "Category", "Item", 
                              "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Sale Price", 
                              "Stock", "Balance", "Other Income", "Expense"]
             
-            # Column အမည်များ လွဲချော်နေပါက ပြန်ညှိပေးခြင်း
+            # Column á€¡á€™á€Šá€ºá€™á€»á€¬á€¸ á€œá€½á€²á€á€»á€±á€¬á€ºá€”á€±á€•á€«á€€ á€•á€¼á€”á€ºá€Šá€¾á€­á€•á€±á€¸á€á€¼á€„á€ºá€¸
             df.columns = expected_cols
             df["Original_Index"] = df.index
             
-            # ၃။ Date format ကို တိကျအောင် ပြောင်းလဲခြင်း
+            # áƒá‹ Date format á€€á€­á€¯ á€á€­á€€á€»á€¡á€±á€¬á€„á€º á€•á€¼á€±á€¬á€„á€ºá€¸á€œá€²á€á€¼á€„á€ºá€¸
             df['Date'] = pd.to_datetime(df['Date']).dt.date
             
-            # ၄။ Stock တွက်ချက်မှု မှန်ကန်စေရန် Date အလိုက် အရင်စီပါ (Old to New)
+            # á„á‹ Stock á€á€½á€€á€ºá€á€»á€€á€ºá€™á€¾á€¯ á€™á€¾á€”á€ºá€€á€”á€ºá€…á€±á€›á€”á€º Date á€¡á€œá€­á€¯á€€á€º á€¡á€›á€„á€ºá€…á€®á€•á€« (Old to New)
             df = df.sort_values(
                 by=["Date", "Original_Index"],
                 ascending=[True, True],
                 kind="mergesort"
             ).reset_index(drop=True)
             
-            # ၅။ မျက်မြင်ဇယားတွင် အသစ်ဆုံး (နောက်ဆုံးစာရင်း) ကို အပေါ်ဆုံးမှာ ပြချင်ပါက 
-            # ဤနေရာတွင် မစီသေးဘဲ UI ပြသခါနီးမှသာ ပြောင်းပြန်စီပေးရပါမည်။
-            # သို့မဟုတ် UI အတွက် သီးသန့် return ပြန်ပေးပါမည်။
+            # á…á‹ á€™á€»á€€á€ºá€™á€¼á€„á€ºá€‡á€šá€¬á€¸á€á€½á€„á€º á€¡á€žá€…á€ºá€†á€¯á€¶á€¸ (á€”á€±á€¬á€€á€ºá€†á€¯á€¶á€¸á€…á€¬á€›á€„á€ºá€¸) á€€á€­á€¯ á€¡á€•á€±á€«á€ºá€†á€¯á€¶á€¸á€™á€¾á€¬ á€•á€¼á€á€»á€„á€ºá€•á€«á€€ 
+            # á€¤á€”á€±á€›á€¬á€á€½á€„á€º á€™á€…á€®á€žá€±á€¸á€˜á€² UI á€•á€¼á€žá€á€«á€”á€®á€¸á€™á€¾á€žá€¬ á€•á€¼á€±á€¬á€„á€ºá€¸á€•á€¼á€”á€ºá€…á€®á€•á€±á€¸á€›á€•á€«á€™á€Šá€ºá‹
+            # á€žá€­á€¯á€·á€™á€Ÿá€¯á€á€º UI á€¡á€á€½á€€á€º á€žá€®á€¸á€žá€”á€·á€º return á€•á€¼á€”á€ºá€•á€±á€¸á€•á€«á€™á€Šá€ºá‹
             return df
             
         else:
-            # Data မရှိလျှင် column အလွတ်များဖြင့် DataFrame အသစ်ပြန်ပေးပါ
+            # Data á€™á€›á€¾á€­á€œá€»á€¾á€„á€º column á€¡á€œá€½á€á€ºá€™á€»á€¬á€¸á€–á€¼á€„á€·á€º DataFrame á€¡á€žá€…á€ºá€•á€¼á€”á€ºá€•á€±á€¸á€•á€«
             cols = ["Date", "Customer", "Payment", "Brand", "Category", "Item", 
                     "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Sale Price", 
                     "Stock", "Balance", "Other Income", "Expense"]
             return pd.DataFrame(columns=cols)
 
     except Exception as e:
-        st.error(f"❌ Data Loading Error: {e}")
-        # Error တက်လျှင်လည်း structure မပျက်အောင် column အလွတ်များ ပြန်ပေးပါ
+        st.error(f"âŒ Data Loading Error: {e}")
+        # Error á€á€€á€ºá€œá€»á€¾á€„á€ºá€œá€Šá€ºá€¸ structure á€™á€•á€»á€€á€ºá€¡á€±á€¬á€„á€º column á€¡á€œá€½á€á€ºá€™á€»á€¬á€¸ á€•á€¼á€”á€ºá€•á€±á€¸á€•á€«
         cols = ["Date", "Customer", "Payment", "Brand", "Category", "Item", 
                 "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Sale Price", 
                 "Stock", "Balance", "Other Income", "Expense"]
         return pd.DataFrame(columns=cols)
 
-# မျက်လုံးခလုတ် အခြေအနေမှတ်ရန် ------
+# á€™á€»á€€á€ºá€œá€¯á€¶á€¸á€á€œá€¯á€á€º á€¡á€á€¼á€±á€¡á€”á€±á€™á€¾á€á€ºá€›á€”á€º ------
 if "show_values" not in st.session_state:
     st.session_state.show_values = False
 
 
-# EE_1 >>> စတင် Run ခြင်း (Cloud Version) -----
-# init_db() ကို အပေါ်က CC_1 မှာ pass လုပ်ထားခဲ့တဲ့အတွက် error မတက်ဘဲ ကျော်သွားပါလိမ့်မယ်
+# EE_1 >>> á€…á€á€„á€º Run á€á€¼á€„á€ºá€¸ (Cloud Version) -----
+# init_db() á€€á€­á€¯ á€¡á€•á€±á€«á€ºá€€ CC_1 á€™á€¾á€¬ pass á€œá€¯á€•á€ºá€‘á€¬á€¸á€á€²á€·á€á€²á€·á€¡á€á€½á€€á€º error á€™á€á€€á€ºá€˜á€² á€€á€»á€±á€¬á€ºá€žá€½á€¬á€¸á€•á€«á€œá€­á€™á€·á€ºá€™á€šá€º
 init_db()
 
 df = load_data()
 
-# Reset Logic (စာရင်းသွင်းပြီးပါက Input Box များ ပြန်ရှင်းရန်) -----
+# Reset Logic (á€…á€¬á€›á€„á€ºá€¸á€žá€½á€„á€ºá€¸á€•á€¼á€®á€¸á€•á€«á€€ Input Box á€™á€»á€¬á€¸ á€•á€¼á€”á€ºá€›á€¾á€„á€ºá€¸á€›á€”á€º) -----
 if "reset_trigger" not in st.session_state:
     st.session_state.reset_trigger = False
 
 if st.session_state.reset_trigger:
-    # သတ်မှတ်ထားသော key များကို loop ပတ်၍ အလွတ် (သို့မဟုတ်) 0 ပြန်ပြောင်းခြင်း
+    # á€žá€á€ºá€™á€¾á€á€ºá€‘á€¬á€¸á€žá€±á€¬ key á€™á€»á€¬á€¸á€€á€­á€¯ loop á€•á€á€ºá á€¡á€œá€½á€á€º (á€žá€­á€¯á€·á€™á€Ÿá€¯á€á€º) 0 á€•á€¼á€”á€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€á€¼á€„á€ºá€¸
     keys_to_reset = ["pq", "pp", "sq", "sp", "fi", "fe", "c_name", "p_type_new"]
     for k in keys_to_reset:
         if k in st.session_state:
-            # စာသားဖြစ်ပါက အလွတ်၊ ဂဏန်းဖြစ်ပါက 0.0 ထားမည်
+            # á€…á€¬á€žá€¬á€¸á€–á€¼á€…á€ºá€•á€«á€€ á€¡á€œá€½á€á€ºáŠ á€‚á€á€”á€ºá€¸á€–á€¼á€…á€ºá€•á€«á€€ 0.0 á€‘á€¬á€¸á€™á€Šá€º
             st.session_state[k] = "" if any(word in k for word in ["name", "type"]) else 0.0
             
-    # Sidebar Dropdown များကို မူလအတိုင်း ပြန်ထားခြင်း
+    # Sidebar Dropdown á€™á€»á€¬á€¸á€€á€­á€¯ á€™á€°á€œá€¡á€á€­á€¯á€„á€ºá€¸ á€•á€¼á€”á€ºá€‘á€¬á€¸á€á€¼á€„á€ºá€¸
     dropdown_keys = {
         "b_drop": "Choose Brand",
         "c_drop": "Choose Category",
@@ -548,7 +650,7 @@ def show_receipt_ui(customer_name, items_list, total_amount):
     from datetime import datetime
     now = datetime.now()
     
-    # ဘောင်ချာထဲက ပစ္စည်းစာရင်း HTML Row များ တည်ဆောက်ခြင်း
+    # á€˜á€±á€¬á€„á€ºá€á€»á€¬á€‘á€²á€€ á€•á€…á€¹á€…á€Šá€ºá€¸á€…á€¬á€›á€„á€ºá€¸ HTML Row á€™á€»á€¬á€¸ á€á€Šá€ºá€†á€±á€¬á€€á€ºá€á€¼á€„á€ºá€¸
     rows_html = "".join([f"""
         <tr>
             <td style='padding: 5px 0;'>{i['name']}</td>
@@ -558,8 +660,8 @@ def show_receipt_ui(customer_name, items_list, total_amount):
         </tr>
     """ for i in items_list])
 
-    # EE_3 >>> Voucher Design (Thermal Printer အတွက်) -----
-    # စာလုံးပေါင်းနှင့် ဒီဇိုင်းကို Cloud Version နှင့် အံကိုက်ဖြစ်အောင် ထိန်းထားပါသည်
+    # EE_3 >>> Voucher Design (Thermal Printer á€¡á€á€½á€€á€º) -----
+    # á€…á€¬á€œá€¯á€¶á€¸á€•á€±á€«á€„á€ºá€¸á€”á€¾á€„á€·á€º á€’á€®á€‡á€­á€¯á€„á€ºá€¸á€€á€­á€¯ Cloud Version á€”á€¾á€„á€·á€º á€¡á€¶á€€á€­á€¯á€€á€ºá€–á€¼á€…á€ºá€¡á€±á€¬á€„á€º á€‘á€­á€”á€ºá€¸á€‘á€¬á€¸á€•á€«á€žá€Šá€º
     receipt_content = f"""
     <div id='print-area' style='width: 300px; font-family: "Courier New", monospace; padding: 10px; color: black;'>
         <div style='text-align: center;'>
@@ -592,7 +694,7 @@ def show_receipt_ui(customer_name, items_list, total_amount):
     """
 
     # EE_4 >>> JavaScript Print Trigger -----
-    # HTML content ကို JavaScript အတွက် ဘေးကင်းအောင် ပြင်ဆင်ခြင်း
+    # HTML content á€€á€­á€¯ JavaScript á€¡á€á€½á€€á€º á€˜á€±á€¸á€€á€„á€ºá€¸á€¡á€±á€¬á€„á€º á€•á€¼á€„á€ºá€†á€„á€ºá€á€¼á€„á€ºá€¸
     safe_content = receipt_content.replace("\n", "").replace('"', "'")
     
     js_print = f"""
@@ -615,8 +717,79 @@ def show_receipt_ui(customer_name, items_list, total_amount):
 
         
 # FF-1 >>> Sidebar (Fixing Logic & Cloud Version) -----
-st.sidebar.write("### ⚙️ Setting")
-if not df.empty:
+st.sidebar.write("### âš™ï¸ Setting")
+if is_admin_user():
+    with st.sidebar.expander("Account Management", expanded=False):
+        users = load_app_users()
+        st.caption("Admin only")
+
+        st.markdown("**Create account**")
+        acct_create_reset_key = st.session_state.get("acct_create_reset_key", 0)
+        new_username = st.text_input("Username", key=f"acct_new_username_{acct_create_reset_key}")
+        new_password = st.text_input("Password (6 digits)", type="password", key=f"acct_new_password_{acct_create_reset_key}")
+        selected_permissions = []
+        for perm_key, perm_label in PERMISSIONS.items():
+            if st.checkbox(perm_label, key=f"acct_new_perm_{acct_create_reset_key}_{perm_key}"):
+                selected_permissions.append(perm_key)
+
+        if st.button("Create Account", use_container_width=True, type="primary", key=f"acct_create_{acct_create_reset_key}"):
+            clean_username = new_username.strip()
+            if not clean_username:
+                st.warning("Enter username")
+            elif clean_username == "admin":
+                st.error("admin account already exists")
+            elif clean_username in users:
+                st.error("Username already exists")
+            elif len(new_password) != 6 or not new_password.isdigit():
+                st.warning("Password must be 6 digits")
+            else:
+                users[clean_username] = {
+                    "password_hash": hash_password(new_password),
+                    "permissions": selected_permissions,
+                    "active": True,
+                }
+                save_app_users(users)
+                st.success(f"Created account: {clean_username}")
+                st.session_state.acct_create_reset_key = acct_create_reset_key + 1
+                st.rerun()
+
+        st.markdown("---")
+        st.markdown("**Manage accounts**")
+        if users:
+            manage_user = st.selectbox("Select account", sorted(users.keys()), key="acct_manage_user")
+            user_data = users.get(manage_user, {})
+            is_active = st.checkbox("Active", value=user_data.get("active", True), key=f"acct_active_{manage_user}")
+            updated_permissions = []
+            for perm_key, perm_label in PERMISSIONS.items():
+                if st.checkbox(
+                    perm_label,
+                    value=perm_key in user_data.get("permissions", []),
+                    key=f"acct_manage_perm_{manage_user}_{perm_key}"
+                ):
+                    updated_permissions.append(perm_key)
+
+            reset_password = st.text_input("New password (optional, 6 digits)", type="password", key=f"acct_reset_pw_{manage_user}")
+            if st.button("Save Account Changes", use_container_width=True, type="primary", key=f"acct_save_{manage_user}"):
+                if reset_password and (len(reset_password) != 6 or not reset_password.isdigit()):
+                    st.warning("New password must be 6 digits")
+                else:
+                    users[manage_user]["active"] = is_active
+                    users[manage_user]["permissions"] = updated_permissions
+                    if reset_password:
+                        users[manage_user]["password_hash"] = hash_password(reset_password)
+                    save_app_users(users)
+                    st.success("Account updated")
+                    st.rerun()
+
+            if st.button("Delete Account", use_container_width=True, type="secondary", key=f"acct_delete_{manage_user}"):
+                users.pop(manage_user, None)
+                save_app_users(users)
+                st.success("Account deleted")
+                st.rerun()
+        else:
+            st.info("No user accounts yet.")
+
+if not df.empty and has_permission("edit_names"):
     with st.sidebar.expander("Edit Names", expanded=False):
         edit_reset_key = st.session_state.get("edit_names_reset_key", 0)
         edit_type = st.radio("What to change?", ["Brand", "Category", "Item", "Customer", "Payment"], key=f"side_edit_type_{edit_reset_key}")
@@ -644,10 +817,10 @@ if not df.empty:
             if st.button(f"Update {edit_type}", type="primary", use_container_width=True, key=f"update_name_{edit_reset_key}"):
                 if old_val and new_val and old_val != new_val:
                     try:
-                        # ၁။ လက်ရှိ data အားလုံးကို ဖတ်ပါ
+                        # áá‹ á€œá€€á€ºá€›á€¾á€­ data á€¡á€¬á€¸á€œá€¯á€¶á€¸á€€á€­á€¯ á€–á€á€ºá€•á€«
                         all_df = conn.read(ttl=60)
                         
-                        # ၂။ သက်ဆိုင်ရာ Row များကို ရှာဖွေပြီး အမည်သစ်ဖြင့် အစားထိုးပါ
+                        # á‚á‹ á€žá€€á€ºá€†á€­á€¯á€„á€ºá€›á€¬ Row á€™á€»á€¬á€¸á€€á€­á€¯ á€›á€¾á€¬á€–á€½á€±á€•á€¼á€®á€¸ á€¡á€™á€Šá€ºá€žá€…á€ºá€–á€¼á€„á€·á€º á€¡á€…á€¬á€¸á€‘á€­á€¯á€¸á€•á€«
                         if edit_type == "Category":
                             mask = (all_df["Brand"] == sel_b) & (all_df["Category"] == old_val)
                         elif edit_type == "Item":
@@ -657,23 +830,23 @@ if not df.empty:
                         
                         all_df.loc[mask, edit_type] = new_val
                         
-                        # ၃။ Cloud ပေါ်သို့ Update လုပ်ပါ
-                        # ၄။ Item အမည်ပြောင်းလဲခြင်းဖြစ်ပါက Stock များကို ပြန်ညှိပါ
+                        # áƒá‹ Cloud á€•á€±á€«á€ºá€žá€­á€¯á€· Update á€œá€¯á€•á€ºá€•á€«
+                        # á„á‹ Item á€¡á€™á€Šá€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€œá€²á€á€¼á€„á€ºá€¸á€–á€¼á€…á€ºá€•á€«á€€ Stock á€™á€»á€¬á€¸á€€á€­á€¯ á€•á€¼á€”á€ºá€Šá€¾á€­á€•á€«
                         if edit_type == "Item":
                             all_df = recalculate_items_in_df(all_df, [new_val])
 
                         conn.update(data=all_df)
                         clear_data_cache()
                         
-                        st.success(f"✅ Updated {edit_type} to '{new_val}'!")
+                        st.success(f"âœ… Updated {edit_type} to '{new_val}'!")
                         st.session_state.edit_names_reset_key = edit_reset_key + 1
                         st.session_state.reset_trigger = True
                         st.rerun()
                         
                     except Exception as e:
-                        st.error(f"❌ Error: {e}")
+                        st.error(f"âŒ Error: {e}")
                 else:
-                    st.warning("⚠️ နာမည်အသစ် ရိုက်ထည့်ပေးပါ။")
+                    st.warning("âš ï¸ á€”á€¬á€™á€Šá€ºá€¡á€žá€…á€º á€›á€­á€¯á€€á€ºá€‘á€Šá€·á€ºá€•á€±á€¸á€•á€«á‹")
 
 # FF_3 >>> Cloud Security Section (Using Secrets Note) -----
 with st.sidebar:
@@ -702,8 +875,8 @@ with st.sidebar:
 with st.sidebar:
     st.markdown('<div class="sidebar-bottom-spacer"></div>', unsafe_allow_html=True)
     st.markdown("---")
-    if st.button("Rebuild All Stocks", use_container_width=True):
-        with st.spinner("🔄 စာရင်းအားလုံးကို ပြန်လည်တွက်ချက်နေပါသည်..."):
+    if has_permission("rebuild_stocks") and st.button("Rebuild All Stocks", use_container_width=True):
+        with st.spinner("ðŸ”„ á€…á€¬á€›á€„á€ºá€¸á€¡á€¬á€¸á€œá€¯á€¶á€¸á€€á€­á€¯ á€•á€¼á€”á€ºá€œá€Šá€ºá€á€½á€€á€ºá€á€»á€€á€ºá€”á€±á€•á€«á€žá€Šá€º..."):
             rebuild_all_stock()
         st.success("All stock rebuilt successfully.")
         st.rerun()
@@ -713,6 +886,9 @@ with st.sidebar:
     if st.button("Log Out", use_container_width=True, type="primary"):
         st.session_state.logged_in = False
         st.session_state.cart = []
+        st.session_state.current_user = None
+        st.session_state.current_role = None
+        st.session_state.user_permissions = []
         st.rerun()
 
 st.components.v1.html("""
@@ -766,6 +942,21 @@ st.components.v1.html("""
         section.main .block-container,
         div[data-testid="stAppViewContainer"] .block-container {
           padding-bottom: 6.5rem !important;
+        }
+        div[data-yw-phone-input-grid="true"] {
+          align-items: start !important;
+        }
+        div[data-yw-phone-input-grid="true"] div.element-container {
+          min-width: 0 !important;
+          width: 100% !important;
+        }
+        div[data-yw-phone-input-grid="true"] [data-testid="stNumberInput"] {
+          width: 100% !important;
+        }
+        div[data-yw-phone-input-grid="true"] [data-testid="stNumberInput"] > div,
+        div[data-yw-phone-input-grid="true"] input {
+          width: 100% !important;
+          min-width: 0 !important;
         }
       }
     `;
@@ -832,6 +1023,18 @@ st.components.v1.html("""
     return labelNode ? labelNode.closest('div[data-testid="stHorizontalBlock"]') : null;
   }
 
+  function fieldContainer(label) {
+    const labelNode = findText(label);
+    return labelNode ? labelNode.closest("div.element-container") : null;
+  }
+
+  function fieldContainerInside(block, label) {
+    if (!block) return null;
+    const labelNode = Array.from(block.querySelectorAll("p, label, span, div"))
+      .find((node) => (node.textContent || "").trim() === label);
+    return labelNode ? labelNode.closest("div.element-container") : null;
+  }
+
   function clearPhoneGrid(block) {
     if (!block) return;
     block.style.removeProperty("display");
@@ -840,6 +1043,7 @@ st.components.v1.html("""
     block.querySelectorAll('[data-testid="column"], div.element-container').forEach((node) => {
       node.style.removeProperty("display");
       node.style.removeProperty("grid-column");
+      node.style.removeProperty("grid-row");
       node.style.removeProperty("width");
       node.style.removeProperty("flex");
     });
@@ -882,6 +1086,39 @@ st.components.v1.html("""
         clearPhoneGrid(block);
       }
     });
+
+    if (isMobile) {
+      const purchaseBlock = horizontalBlockFor("Purchase Qty");
+      if (purchaseBlock) {
+        purchaseBlock.setAttribute("data-yw-phone-input-grid", "true");
+      }
+      const positions = [
+        ["Purchase Qty", 1, 1],
+        ["Sale Qty", 1, 2],
+        ["Purchase Price (THB)", 2, 1],
+        ["Sale Price (THB)", 2, 2],
+        ["Other Income", 3, 1],
+        ["Expense", 3, 2],
+      ];
+      positions.forEach(([label, row, column]) => {
+        const item = fieldContainerInside(purchaseBlock, label) || fieldContainer(label);
+        if (!item || !purchaseBlock) return;
+        purchaseBlock.appendChild(item);
+        purchaseBlock.style.setProperty("display", "grid", "important");
+        purchaseBlock.style.setProperty("grid-template-columns", "minmax(0, 1fr) minmax(0, 1fr)", "important");
+        purchaseBlock.style.setProperty("gap", "0.65rem", "important");
+        item.style.setProperty("grid-row", String(row), "important");
+        item.style.setProperty("grid-column", String(column), "important");
+        item.style.setProperty("display", "block", "important");
+        item.style.setProperty("width", "100%", "important");
+        item.style.setProperty("min-width", "0", "important");
+      });
+    } else {
+      const purchaseBlock = horizontalBlockFor("Purchase Qty");
+      if (purchaseBlock) {
+        purchaseBlock.removeAttribute("data-yw-phone-input-grid");
+      }
+    }
   }
 
   function applyMode() {
@@ -903,6 +1140,11 @@ st.components.v1.html("""
   setTimeout(applyMode, 500);
   setTimeout(applyMode, 1500);
   setTimeout(applyMode, 3000);
+  const observer = new MutationObserver(() => {
+    window.clearTimeout(window.ywPhoneLayoutTimer);
+    window.ywPhoneLayoutTimer = window.setTimeout(applyMode, 120);
+  });
+  observer.observe(doc.body, { childList: true, subtree: true });
 })();
 </script>
 """, height=0)
@@ -910,10 +1152,10 @@ st.components.v1.html("""
 # GG_1>>> Dashboard Area -----
 st.markdown('<div id="dashboard" class="mobile-page-anchor mobile-section-marker" data-section="dashboard"></div>', unsafe_allow_html=True)
 
-# --- Dashboard Metric Box များအတွက် CSS Styling ---
+# --- Dashboard Metric Box á€™á€»á€¬á€¸á€¡á€á€½á€€á€º CSS Styling ---
 st.markdown("""
     <style>
-    /* Metric Box များကို ပိုမိုလှပအောင် ပြုပြင်ခြင်း */
+    /* Metric Box á€™á€»á€¬á€¸á€€á€­á€¯ á€•á€­á€¯á€™á€­á€¯á€œá€¾á€•á€¡á€±á€¬á€„á€º á€•á€¼á€¯á€•á€¼á€„á€ºá€á€¼á€„á€ºá€¸ */
     [data-testid="stMetric"] {
         background-color: #ffffff !important;
         border-left: 6px solid #00bcd4 !important;
@@ -931,7 +1173,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.write("<h2 style='text-align: left; color: #000000;'> 📊 Yoon Waddy Dashboard</h2>", unsafe_allow_html=True)
+st.write("<h2 style='text-align: left; color: #000000;'> ðŸ“Š Yoon Waddy Dashboard</h2>", unsafe_allow_html=True)
 
 with st.container(border=True):
     dash_col1, dash_col2, dash_col3 = st.columns([2, 2, 2])
@@ -939,33 +1181,33 @@ with st.container(border=True):
     d_end = dash_col2.date_input("Dash End Date", value=date.today(), key="de_key")
     dash_col3.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
 
-    if dash_col3.button("🔍 Search Dash", use_container_width=True, type="primary"):
+    if dash_col3.button("ðŸ” Search Dash", use_container_width=True, type="primary"):
         st.rerun()
 
     # --- Filter Logic ---
-    # df ကို load_data() ကနေ Date အလိုက် Ascending စီပြီးသား အခြေအနေမှာ သုံးပါမယ်
+    # df á€€á€­á€¯ load_data() á€€á€”á€± Date á€¡á€œá€­á€¯á€€á€º Ascending á€…á€®á€•á€¼á€®á€¸á€žá€¬á€¸ á€¡á€á€¼á€±á€¡á€”á€±á€™á€¾á€¬ á€žá€¯á€¶á€¸á€•á€«á€™á€šá€º
     mask = (df["Date"] >= d_start) & (df["Date"] <= d_end)
     f_df = df.loc[mask]
 
-    # တွက်ချက်မှုများ (ရွေးချယ်ထားသော ရက်စွဲအတွင်း)
+    # á€á€½á€€á€ºá€á€»á€€á€ºá€™á€¾á€¯á€™á€»á€¬á€¸ (á€›á€½á€±á€¸á€á€»á€šá€ºá€‘á€¬á€¸á€žá€±á€¬ á€›á€€á€ºá€…á€½á€²á€¡á€á€½á€„á€ºá€¸)
     t_pur = (f_df["Purchase Qty"] * f_df["Pur Price"]).sum()
     t_sales = (f_df["Sale Qty"] * f_df["Sale Price"]).sum()
     t_inc = f_df["Other Income"].sum()
     t_exp = f_df["Expense"].sum()
-    total_profit = t_sales - t_pur # အခြေခံအမြတ်တွက်နည်း
+    total_profit = t_sales - t_pur # á€¡á€á€¼á€±á€á€¶á€¡á€™á€¼á€á€ºá€á€½á€€á€ºá€”á€Šá€ºá€¸
 
-    # Stock Balance Value (လက်ကျန်ပစ္စည်းတန်ဖိုး) Cloud Version ---
+    # Stock Balance Value (á€œá€€á€ºá€€á€»á€”á€ºá€•á€…á€¹á€…á€Šá€ºá€¸á€á€”á€ºá€–á€­á€¯á€¸) Cloud Version ---
     if not df.empty:
-        # ID မရှိသဖြင့် DataFrame ၏ Row အစီအစဉ်အတိုင်း နောက်ဆုံး Row ကို ယူပါမည်
-        # load_data တွင် Date အလိုက် စီထားပြီးဖြစ်သဖြင့် tail(1) သည် နောက်ဆုံးစာရင်း ဖြစ်ပါသည်
+        # ID á€™á€›á€¾á€­á€žá€–á€¼á€„á€·á€º DataFrame á Row á€¡á€…á€®á€¡á€…á€‰á€ºá€¡á€á€­á€¯á€„á€ºá€¸ á€”á€±á€¬á€€á€ºá€†á€¯á€¶á€¸ Row á€€á€­á€¯ á€šá€°á€•á€«á€™á€Šá€º
+        # load_data á€á€½á€„á€º Date á€¡á€œá€­á€¯á€€á€º á€…á€®á€‘á€¬á€¸á€•á€¼á€®á€¸á€–á€¼á€…á€ºá€žá€–á€¼á€„á€·á€º tail(1) á€žá€Šá€º á€”á€±á€¬á€€á€ºá€†á€¯á€¶á€¸á€…á€¬á€›á€„á€ºá€¸ á€–á€¼á€…á€ºá€•á€«á€žá€Šá€º
         current_balance = df.groupby('Item').tail(1)['Balance'].sum()
     else:
         current_balance = 0
 
-    # မျက်လုံးခလုတ် (Show/Hide Values) -----
+    # á€™á€»á€€á€ºá€œá€¯á€¶á€¸á€á€œá€¯á€á€º (Show/Hide Values) -----
     d_col_title, d_col_eye = st.columns([0.92, 0.08])
     with d_col_eye:
-        icon = "👁️" if st.session_state.show_values else "🙈" 
+        icon = "ðŸ‘ï¸" if st.session_state.show_values else "ðŸ™ˆ" 
         if st.button(icon, key="dash_eye"):
             st.session_state.show_values = not st.session_state.show_values
             st.rerun()
@@ -976,16 +1218,21 @@ with st.container(border=True):
             return f"{val:,.0f} THB"
         return "****** THB"
 
-    # Metric များပြသခြင်း -----
+    def mask_sensitive_v(val):
+        if not has_permission("view_stock_profit"):
+            return "****** THB"
+        return mask_v(val)
+
+    # Metric á€™á€»á€¬á€¸á€•á€¼á€žá€á€¼á€„á€ºá€¸ -----
     m1, m2, m3 = st.columns(3)
     m1.metric("Total Purchase", mask_v(t_pur))
     m2.metric("Total Sales", mask_v(t_sales))
-    m3.metric("Stock Balance Value", mask_v(current_balance))
+    m3.metric("Stock Balance Value", mask_sensitive_v(current_balance))
 
     s1, s2, s3 = st.columns(3)
     s1.metric("Other Income", mask_v(t_inc))
     s2.metric("Expense", mask_v(t_exp))
-    s3.metric("Profit (Sales - Pur)", mask_v(total_profit))
+    s3.metric("Profit (Sales - Pur)", mask_sensitive_v(total_profit))
 
     st.divider()
 
@@ -993,26 +1240,27 @@ with st.container(border=True):
 
 # HH_1 >>> New Transaction Area -----
 st.markdown('<div id="new-transaction" class="mobile-page-anchor mobile-section-marker" data-section="new"></div>', unsafe_allow_html=True)
-st.write("#### ➕ New Transaction")
+st.write("#### âž• New Transaction")
 r1_c1, r1_c2, r1_c3 = st.columns([1, 1, 1])
+add_new_options = ["+ Add New"] if has_permission("add_new_names") else []
 
 with r1_c1:
     tr_date = st.date_input("Date", date.today(), key="tr_date_key")
 
 with r1_c2:
     cust_list = sorted([str(x) for x in df["Customer"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else []
-    c_sel = st.selectbox("Customer Name", ["Choose Customer"] + cust_list + ["+ Add New"], key="cust_drop")
+    c_sel = st.selectbox("Customer Name", ["Choose Customer"] + cust_list + add_new_options, key="cust_drop")
     cust_name = st.text_input("New Customer Name", placeholder="Enter customer name...", key="c_name") if c_sel == "+ Add New" else (c_sel if c_sel != "Choose Customer" else "")
 
 with r1_c3:
     pay_list = sorted([str(x) for x in df["Payment"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else ["Cash", "KPay", "Wave"]
-    p_sel = st.selectbox("Payment Method", ["Choose Payment"] + pay_list + ["+ Add New"], key="pay_drop")
+    p_sel = st.selectbox("Payment Method", ["Choose Payment"] + pay_list + add_new_options, key="pay_drop")
     pay_type = st.text_input("New Payment Method", key="p_type_new") if p_sel == "+ Add New" else (p_sel if p_sel != "Choose Payment" else "Cash")
 
 f2, f3, f4 = st.columns(3)
 with f2:
     b_list = sorted([str(x) for x in df["Brand"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else []
-    b_sel = st.selectbox("Brand", ["Choose Brand"] + b_list + ["+ Add New"], key="b_drop")
+    b_sel = st.selectbox("Brand", ["Choose Brand"] + b_list + add_new_options, key="b_drop")
     f_brand = st.text_input("New Brand", key="new_b_input") if b_sel == "+ Add New" else (b_sel if b_sel != "Choose Brand" else "")
 
 with f3:
@@ -1022,7 +1270,7 @@ with f3:
         filtered_cats = []
 
     is_cat_disabled = (f_brand == "" or b_sel == "Choose Brand")
-    c_sel_val = st.selectbox("Category", ["Choose Category"] + filtered_cats + ["+ Add New"], 
+    c_sel_val = st.selectbox("Category", ["Choose Category"] + filtered_cats + add_new_options, 
                              key="c_drop", 
                              disabled=is_cat_disabled)
     f_cat = st.text_input("New Category", key="new_c_input") if c_sel_val == "+ Add New" else (c_sel_val if c_sel_val != "Choose Category" else "")
@@ -1034,35 +1282,35 @@ with f4:
         filtered_items = []
 
     is_item_disabled = (f_cat == "" or c_sel_val == "Choose Category")
-    i_sel = st.selectbox("Item Name", ["Choose Item"] + filtered_items + ["+ Add New"], 
+    i_sel = st.selectbox("Item Name", ["Choose Item"] + filtered_items + add_new_options, 
                          key="i_drop", 
                          disabled=is_item_disabled)
     f_item = st.text_input("New Item", key="new_i_input") if i_sel == "+ Add New" else (i_sel if i_sel != "Choose Item" else "")
 
-# --- Stock နှင့် နောက်ဆုံးဈေးနှုန်းများ ရှာဖွေခြင်း (Cloud Version) ---
+# --- Stock á€”á€¾á€„á€·á€º á€”á€±á€¬á€€á€ºá€†á€¯á€¶á€¸á€ˆá€±á€¸á€”á€¾á€¯á€”á€ºá€¸á€™á€»á€¬á€¸ á€›á€¾á€¬á€–á€½á€±á€á€¼á€„á€ºá€¸ (Cloud Version) ---
 l_stock, l_price, l_pur_price = 0.0, 0.0, 0.0 
 
 if f_item and f_item not in ["Choose Item", "+ Add New", ""]:
-    # ၁။ ရွေးချယ်ထားသော Item နှင့် ကိုက်ညီသည့် Row များကို ရှာပါ
+    # áá‹ á€›á€½á€±á€¸á€á€»á€šá€ºá€‘á€¬á€¸á€žá€±á€¬ Item á€”á€¾á€„á€·á€º á€€á€­á€¯á€€á€ºá€Šá€®á€žá€Šá€·á€º Row á€™á€»á€¬á€¸á€€á€­á€¯ á€›á€¾á€¬á€•á€«
     matched = df[(df["Brand"] == f_brand) & (df["Category"] == f_cat) & (df["Item"] == f_item)]
 
     if not matched.empty:
-        # ၂။ နောက်ဆုံးသွင်းထားသော Record (နောက်ဆုံး Row) ကို ယူပါ
-        # load_data() တွင် Date အလိုက် စီထားပြီးဖြစ်သဖြင့် iloc[-1] က အသစ်ဆုံးဖြစ်ပါသည်
+        # á‚á‹ á€”á€±á€¬á€€á€ºá€†á€¯á€¶á€¸á€žá€½á€„á€ºá€¸á€‘á€¬á€¸á€žá€±á€¬ Record (á€”á€±á€¬á€€á€ºá€†á€¯á€¶á€¸ Row) á€€á€­á€¯ á€šá€°á€•á€«
+        # load_data() á€á€½á€„á€º Date á€¡á€œá€­á€¯á€€á€º á€…á€®á€‘á€¬á€¸á€•á€¼á€®á€¸á€–á€¼á€…á€ºá€žá€–á€¼á€„á€·á€º iloc[-1] á€€ á€¡á€žá€…á€ºá€†á€¯á€¶á€¸á€–á€¼á€…á€ºá€•á€«á€žá€Šá€º
         latest_row = matched.iloc[-1]
     
         l_stock = float(latest_row["Stock"])
         l_price = float(latest_row["Sale Price"])
         l_pur_price = float(latest_row["Pur Price"])
 
-# UI ပေါ်တွင် လက်ရှိ Stock ပြသခြင်း
+# UI á€•á€±á€«á€ºá€á€½á€„á€º á€œá€€á€ºá€›á€¾á€­ Stock á€•á€¼á€žá€á€¼á€„á€ºá€¸
 if f_item and f_item not in ["Choose Item", "+ Add New", ""]:
     if l_stock <= 0:
-        st.error(f"❌ Current Stock for **{f_item}** : **{l_stock:,.0f}** (Out of Stock)")
+        st.error(f"âŒ Current Stock for **{f_item}** : **{l_stock:,.0f}** (Out of Stock)")
     else:
-        st.info(f"💡 Current Stock for **{f_item}** : **{l_stock:,.0f}** units")
+        st.info(f"ðŸ’¡ Current Stock for **{f_item}** : **{l_stock:,.0f}** units")
 
-# အလိုအလျောက် ဈေးနှုန်းဖြည့်ပေးမည့် Logic
+# á€¡á€œá€­á€¯á€¡á€œá€»á€±á€¬á€€á€º á€ˆá€±á€¸á€”á€¾á€¯á€”á€ºá€¸á€–á€¼á€Šá€·á€ºá€•á€±á€¸á€™á€Šá€·á€º Logic
 def update_input_fields():
     pq = st.session_state.get("pq", 0)
     sq = st.session_state.get("sq", 0)
@@ -1080,7 +1328,7 @@ def update_input_fields():
 
 # II_1 >>> Input Sections -----
 
-# Session State ထဲတွင် key များ ရှိမရှိ အရင်စစ်ဆေးပြီး Default သတ်မှတ်ခြင်း
+# Session State á€‘á€²á€á€½á€„á€º key á€™á€»á€¬á€¸ á€›á€¾á€­á€™á€›á€¾á€­ á€¡á€›á€„á€ºá€…á€…á€ºá€†á€±á€¸á€•á€¼á€®á€¸ Default á€žá€á€ºá€™á€¾á€á€ºá€á€¼á€„á€ºá€¸
 if "pq" not in st.session_state: st.session_state.pq = 0.0
 if "sq" not in st.session_state: st.session_state.sq = 0.0
 if "pp" not in st.session_state: st.session_state.pp = 0.0
@@ -1089,7 +1337,7 @@ if "sp" not in st.session_state: st.session_state.sp = 0.0
 col_p, col_s, col_o = st.columns(3)
 
 with col_p:
-    # Purchase Qty: sq (အရောင်း) ရှိနေလျှင် နှိပ်၍မရအောင် ပိတ်ထားမည်
+    # Purchase Qty: sq (á€¡á€›á€±á€¬á€„á€ºá€¸) á€›á€¾á€­á€”á€±á€œá€»á€¾á€„á€º á€”á€¾á€­á€•á€ºáá€™á€›á€¡á€±á€¬á€„á€º á€•á€­á€á€ºá€‘á€¬á€¸á€™á€Šá€º
     p_qty = st.number_input(
         "Purchase Qty", 
         min_value=0.0, 
@@ -1100,7 +1348,7 @@ with col_p:
     )
 
     # Purchase Price logic: 
-    # Purchase Qty (pq) ရှိမှသာ သို့မဟုတ် အသစ်ထည့်ရန်ဖြစ်ပါက ဝယ်ဈေးကို ပြင်ခွင့်ပေးမည်
+    # Purchase Qty (pq) á€›á€¾á€­á€™á€¾á€žá€¬ á€žá€­á€¯á€·á€™á€Ÿá€¯á€á€º á€¡á€žá€…á€ºá€‘á€Šá€·á€ºá€›á€”á€ºá€–á€¼á€…á€ºá€•á€«á€€ á€á€šá€ºá€ˆá€±á€¸á€€á€­á€¯ á€•á€¼á€„á€ºá€á€½á€„á€·á€ºá€•á€±á€¸á€™á€Šá€º
     pur_price_disabled = (st.session_state.pq <= 0)
     p_pr = st.number_input(
         "Purchase Price (THB)", 
@@ -1111,7 +1359,7 @@ with col_p:
     )
 
 with col_s:
-    # Sale Qty: pq (ဝယ်ယူမှု) ရှိနေလျှင် နှိပ်၍မရအောင် ပိတ်ထားမည်
+    # Sale Qty: pq (á€á€šá€ºá€šá€°á€™á€¾á€¯) á€›á€¾á€­á€”á€±á€œá€»á€¾á€„á€º á€”á€¾á€­á€•á€ºáá€™á€›á€¡á€±á€¬á€„á€º á€•á€­á€á€ºá€‘á€¬á€¸á€™á€Šá€º
     s_qty = st.number_input(
         "Sale Qty", 
         min_value=0.0, 
@@ -1122,8 +1370,8 @@ with col_s:
     )
 
     # Sale Price logic: 
-    # ဝယ်ယူမှု (pq) သွင်းနေချိန်တွင်လည်း နောက်နောင်ရောင်းရန် ဈေးနှုန်းသတ်မှတ်နိုင်ရမည်
-    # အရောင်း (sq) ရှိနေလျှင်လည်း ဈေးနှုန်းပြင်နိုင်ရမည်
+    # á€á€šá€ºá€šá€°á€™á€¾á€¯ (pq) á€žá€½á€„á€ºá€¸á€”á€±á€á€»á€­á€”á€ºá€á€½á€„á€ºá€œá€Šá€ºá€¸ á€”á€±á€¬á€€á€ºá€”á€±á€¬á€„á€ºá€›á€±á€¬á€„á€ºá€¸á€›á€”á€º á€ˆá€±á€¸á€”á€¾á€¯á€”á€ºá€¸á€žá€á€ºá€™á€¾á€á€ºá€”á€­á€¯á€„á€ºá€›á€™á€Šá€º
+    # á€¡á€›á€±á€¬á€„á€ºá€¸ (sq) á€›á€¾á€­á€”á€±á€œá€»á€¾á€„á€ºá€œá€Šá€ºá€¸ á€ˆá€±á€¸á€”á€¾á€¯á€”á€ºá€¸á€•á€¼á€„á€ºá€”á€­á€¯á€„á€ºá€›á€™á€Šá€º
     sale_price_disabled = (st.session_state.pq <= 0 and st.session_state.sq <= 0)
     s_pr = st.number_input(
         "Sale Price (THB)", 
@@ -1140,27 +1388,29 @@ with col_o:
 
 # JJ_1 >>> Saving Logic (Google Sheets Version) -----
 if st.button("Save Transaction", use_container_width=True, type="primary"):
-    # ၁။ အရောင်းသွင်းလျှင် Stock ရှိမရှိ အရင်စစ်မည်
+    if not require_permission("new_transaction"):
+        st.stop()
+    # áá‹ á€¡á€›á€±á€¬á€„á€ºá€¸á€žá€½á€„á€ºá€¸á€œá€»á€¾á€„á€º Stock á€›á€¾á€­á€™á€›á€¾á€­ á€¡á€›á€„á€ºá€…á€…á€ºá€™á€Šá€º
     if s_qty > 0 and l_stock < s_qty:
-        st.error(f"❌ လက်ကျန် Stock ({l_stock:,.0f}) ထက် ပိုရောင်း၍မရပါ။")
+        st.error(f"âŒ á€œá€€á€ºá€€á€»á€”á€º Stock ({l_stock:,.0f}) á€‘á€€á€º á€•á€­á€¯á€›á€±á€¬á€„á€ºá€¸áá€™á€›á€•á€«á‹")
         st.stop()
 
-    # ၂။ အနှုတ်ဂဏန်းများ မဝင်အောင် ကာကွယ်ခြင်း
+    # á‚á‹ á€¡á€”á€¾á€¯á€á€ºá€‚á€á€”á€ºá€¸á€™á€»á€¬á€¸ á€™á€á€„á€ºá€¡á€±á€¬á€„á€º á€€á€¬á€€á€½á€šá€ºá€á€¼á€„á€ºá€¸
     if p_qty < 0 or s_qty < 0 or f_inc_val < 0 or f_exp_val < 0:
-        st.error("❌ Quantity သို့မဟုတ် Amount များသည် အနှုတ်ဂဏန်း (Negative) မဖြစ်ရပါ။")
+        st.error("âŒ Quantity á€žá€­á€¯á€·á€™á€Ÿá€¯á€á€º Amount á€™á€»á€¬á€¸á€žá€Šá€º á€¡á€”á€¾á€¯á€á€ºá€‚á€á€”á€ºá€¸ (Negative) á€™á€–á€¼á€…á€ºá€›á€•á€«á‹")
         st.stop()
 
-    # ၃။ အနည်းဆုံး အချက်အလက် တစ်ခုခု ပါဝင်မှ သိမ်းမည်
+    # áƒá‹ á€¡á€”á€Šá€ºá€¸á€†á€¯á€¶á€¸ á€¡á€á€»á€€á€ºá€¡á€œá€€á€º á€á€…á€ºá€á€¯á€á€¯ á€•á€«á€á€„á€ºá€™á€¾ á€žá€­á€™á€ºá€¸á€™á€Šá€º
     elif (f_item or f_inc_val > 0 or f_exp_val > 0):
         try:
-            with st.spinner("☁️ Cloud ပေါ်သို့ သိမ်းဆည်းနေပါသည်..."):
+            with st.spinner("â˜ï¸ Cloud á€•á€±á€«á€ºá€žá€­á€¯á€· á€žá€­á€™á€ºá€¸á€†á€Šá€ºá€¸á€”á€±á€•á€«á€žá€Šá€º..."):
                 before_amt = float(l_stock) if f_item and f_item != "-" else 0.0
                 after_stock = max((before_amt + float(p_qty)) - float(s_qty), 0.0)
                 balance = after_stock * float(p_pr) if float(p_pr) > 0 else 0.0
 
-                # သိမ်းဆည်းမည့် Row တန်ဖိုးများ (Column ၁၅ ခု)
+                # á€žá€­á€™á€ºá€¸á€†á€Šá€ºá€¸á€™á€Šá€·á€º Row á€á€”á€ºá€–á€­á€¯á€¸á€™á€»á€¬á€¸ (Column áá… á€á€¯)
                 row_data = {
-                    "Date": tr_date, # load_data နှင့် ညီစေရန် Date object အတိုင်း ထားပါ
+                    "Date": tr_date, # load_data á€”á€¾á€„á€·á€º á€Šá€®á€…á€±á€›á€”á€º Date object á€¡á€á€­á€¯á€„á€ºá€¸ á€‘á€¬á€¸á€•á€«
                     "Customer": cust_name if cust_name else "-",
                     "Payment": pay_type if pay_type else "Cash",
                     "Brand": f_brand if f_brand else "-",
@@ -1184,25 +1434,25 @@ if st.button("Save Transaction", use_container_width=True, type="primary"):
                 )
                 clear_data_cache()
 
-                # ၅။ ပြီးဆုံးကြောင်း အသိပေးပြီး UI Reset လုပ်မည်
+                # á…á‹ á€•á€¼á€®á€¸á€†á€¯á€¶á€¸á€€á€¼á€±á€¬á€„á€ºá€¸ á€¡á€žá€­á€•á€±á€¸á€•á€¼á€®á€¸ UI Reset á€œá€¯á€•á€ºá€™á€Šá€º
                 st.session_state.reset_trigger = True
-                st.success("✅ စာရင်းကို Cloud ပေါ်သို့ သိမ်းဆည်းပြီး Stock ပြန်လည်တွက်ချက်ပြီးပါပြီ!")
+                st.success("âœ… á€…á€¬á€›á€„á€ºá€¸á€€á€­á€¯ Cloud á€•á€±á€«á€ºá€žá€­á€¯á€· á€žá€­á€™á€ºá€¸á€†á€Šá€ºá€¸á€•á€¼á€®á€¸ Stock á€•á€¼á€”á€ºá€œá€Šá€ºá€á€½á€€á€ºá€á€»á€€á€ºá€•á€¼á€®á€¸á€•á€«á€•á€¼á€®!")
                 st.rerun()
 
         except Exception as e:
-            st.error(f"❌ Google Sheets Error: {e}")
+            st.error(f"âŒ Google Sheets Error: {e}")
         
     else:
-        st.warning("⚠️ သိမ်းဆည်းရန် အချက်အလက်များ ပြည့်စုံစွာ ဖြည့်စွက်ပေးပါ။")
+        st.warning("âš ï¸ á€žá€­á€™á€ºá€¸á€†á€Šá€ºá€¸á€›á€”á€º á€¡á€á€»á€€á€ºá€¡á€œá€€á€ºá€™á€»á€¬á€¸ á€•á€¼á€Šá€·á€ºá€…á€¯á€¶á€…á€½á€¬ á€–á€¼á€Šá€·á€ºá€…á€½á€€á€ºá€•á€±á€¸á€•á€«á‹")
 
 
 
 # KK_1 >>> History Table (Cloud Version) -----
 st.markdown('<div id="history" class="mobile-page-anchor mobile-section-marker" data-section="history"></div>', unsafe_allow_html=True)
-st.write("#### 📋 Transaction History")
+st.write("#### ðŸ“‹ Transaction History")
 
 if not df.empty:
-    # Filter များကို တစ်တန်းတည်းပြခြင်း
+    # Filter á€™á€»á€¬á€¸á€€á€­á€¯ á€á€…á€ºá€á€”á€ºá€¸á€á€Šá€ºá€¸á€•á€¼á€á€¼á€„á€ºá€¸
     f1, f2, f3, f4, f5 = st.columns(5)
     with f1: sel_cus = st.selectbox("Filter by Customer", ["All"] + sorted(df["Customer"].dropna().unique().tolist()), key="f_cus")
     with f2: sel_pay = st.selectbox("Filter by Payment", ["All"] + sorted(df["Payment"].dropna().unique().tolist()), key="f_pay")
@@ -1210,23 +1460,23 @@ if not df.empty:
     with f4: sel_cat = st.selectbox("Filter by Category", ["All"] + sorted(df["Category"].dropna().unique().tolist()), key="f_cat")
     with f5: sel_item = st.selectbox("Filter by Item", ["All"] + sorted(df["Item"].dropna().unique().tolist()), key="f_item")
 
-    # Date Range နှင့် ခလုတ်များ
+    # Date Range á€”á€¾á€„á€·á€º á€á€œá€¯á€á€ºá€™á€»á€¬á€¸
     with st.container(border=True):
         h_col1, h_col2, h_col3, h_col4, h_col5, h_col6 = st.columns([1, 1, 1, 1, 1, 1])
         h_start = h_col1.date_input("Start Date", value=date.today(), key="h_start_val")
         h_end = h_col2.date_input("End Date", value=date.today(), key="h_end_val")
     
         h_col3.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        history_search = h_col3.button("🔍 Search", use_container_width=True, type="primary")    
+        history_search = h_col3.button("ðŸ” Search", use_container_width=True, type="primary")    
 
         h_col4.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        edit_btn = h_col4.button("📝 Edit", use_container_width=True, type="secondary") 
+        edit_btn = h_col4.button("📝 Edit", use_container_width=True, type="secondary", disabled=not has_permission("edit_history"))
 
         h_col5.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        print_btn = h_col5.button("🖨 Print", use_container_width=True, type="primary")
+        print_btn = h_col5.button("🖨 Print", use_container_width=True, type="primary", disabled=not has_permission("print_history"))
 
         h_col6.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        delete_btn = h_col6.button("🗑 Delete", use_container_width=True, type="secondary")
+        delete_btn = h_col6.button("🗑 Delete", use_container_width=True, type="secondary", disabled=not has_permission("delete_history"))
 
     # Filter Logic
     h_df = df.copy()
@@ -1251,7 +1501,7 @@ if not df.empty:
         st.markdown(
             f"""
             <div style="border-left: 4px solid #ff4b4b; background: #f8fafc; padding: 12px 14px; border-radius: 8px; font-weight: 700;">
-                📊 Filtered Total Sales: <span style="color:#ff4b4b;">{filtered_total_sales:,.0f} THB</span>
+                ðŸ“Š Filtered Total Sales: <span style="color:#ff4b4b;">{filtered_total_sales:,.0f} THB</span>
             </div>
             """,
             unsafe_allow_html=True
@@ -1260,14 +1510,14 @@ if not df.empty:
         st.markdown(
             f"""
             <div style="border-left: 4px solid #0ea5e9; background: #f8fafc; padding: 12px 14px; border-radius: 8px; font-weight: 700;">
-                🛒 Filtered Total Purchases: <span style="color:#0b84f3;">{filtered_total_purchases:,.0f} THB</span>
+                ðŸ›’ Filtered Total Purchases: <span style="color:#0b84f3;">{filtered_total_purchases:,.0f} THB</span>
             </div>
             """,
             unsafe_allow_html=True
         )
 
-    # Data Editor (ရွေးချယ်နိုင်သော ဇယား)
-    # Original_Index သည် Google Sheet ထဲရှိ row order ကို ထိန်းထားသည်။
+    # Data Editor (á€›á€½á€±á€¸á€á€»á€šá€ºá€”á€­á€¯á€„á€ºá€žá€±á€¬ á€‡á€šá€¬á€¸)
+    # Original_Index á€žá€Šá€º Google Sheet á€‘á€²á€›á€¾á€­ row order á€€á€­á€¯ á€‘á€­á€”á€ºá€¸á€‘á€¬á€¸á€žá€Šá€ºá‹
     if "Original_Index" not in h_df.columns:
         h_df["Original_Index"] = h_df.index
     h_df = h_df.sort_values(by="Original_Index", ascending=False).reset_index(drop=True)
@@ -1283,13 +1533,13 @@ if not df.empty:
         disabled=read_only_cols,
         column_config={
             "Select": st.column_config.CheckboxColumn("Select", default=False),
-            "Original_Index": None # User ကို မပြပါ
+            "Original_Index": None # User á€€á€­á€¯ á€™á€•á€¼á€•á€«
         },
         key=t_key
     )
 
     # LL_1 >>> EDIT DIALOG (Cloud Version) -----
-    @st.dialog("📝 Edit Transaction Record")
+    @st.dialog("ðŸ“ Edit Transaction Record")
     def edit_transaction_dialog(row_data, original_idx):
         target_idx = int(original_idx)
         target_item = str(row_data["Item"])
@@ -1395,15 +1645,15 @@ if not df.empty:
                 st.error(f"Update Error: {e}")
 
     # LL_2 >>> DELETE DIALOG (Cloud Version) -----
-    @st.dialog("⚠️ Confirm Delete")
+    @st.dialog("âš ï¸ Confirm Delete")
     def delete_confirmation_dialog(selected_df):
         st.warning(f"Delete {len(selected_df)} selected records?")
-        confirm_pw = st.text_input("Admin Password", type="password")
+        confirm_pw = st.text_input("Current Account Password", type="password")
     
         if st.button("Confirm Delete", type="primary", use_container_width=True):
             if confirm_pw == st.session_state.get("password", "123456"):
                 all_df = conn.read(ttl=60)
-                # ရွေးထားသော Original_Index များကို ဖယ်ထုတ်ပါ
+                # á€›á€½á€±á€¸á€‘á€¬á€¸á€žá€±á€¬ Original_Index á€™á€»á€¬á€¸á€€á€­á€¯ á€–á€šá€ºá€‘á€¯á€á€ºá€•á€«
                 indices_to_drop = [int(idx) for idx in selected_df["Original_Index"].tolist()]
                 all_df = all_df.drop(indices_to_drop)
             
@@ -1419,6 +1669,8 @@ if not df.empty:
 
     # MM_1, 2, 3 Logic
     if edit_btn:
+        if not require_permission("edit_history"):
+            st.stop()
         selected_to_edit = edited_df[edited_df["Select"] == True]
         if len(selected_to_edit) == 1:
             edit_transaction_dialog(selected_to_edit.iloc[0], selected_to_edit.iloc[0]["Original_Index"])
@@ -1426,6 +1678,8 @@ if not df.empty:
             st.warning("Please select exactly one record to edit.")
 
     if delete_btn:
+        if not require_permission("delete_history"):
+            st.stop()
         selected_to_delete = edited_df[edited_df["Select"] == True]
         if not selected_to_delete.empty:
             delete_confirmation_dialog(selected_to_delete)
@@ -1433,7 +1687,9 @@ if not df.empty:
             st.warning("Select transactions to delete.")
 
     if print_btn:
-        # သင်၏ မူရင်း Print Logic အတိုင်း ဆက်လက်အသုံးပြုနိုင်ပါသည်
+        if not require_permission("print_history"):
+            st.stop()
+        # á€žá€„á€ºá á€™á€°á€›á€„á€ºá€¸ Print Logic á€¡á€á€­á€¯á€„á€ºá€¸ á€†á€€á€ºá€œá€€á€ºá€¡á€žá€¯á€¶á€¸á€•á€¼á€¯á€”á€­á€¯á€„á€ºá€•á€«á€žá€Šá€º
         selected_rows = edited_df[edited_df["Select"] == True]
         if not selected_rows.empty:
             cust_name = str(selected_rows.iloc[0]['Customer'])
