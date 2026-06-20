@@ -717,7 +717,7 @@ def show_receipt_ui(customer_name, items_list, total_amount):
 
         
 # FF-1 >>> Sidebar (Fixing Logic & Cloud Version) -----
-st.sidebar.write("### âš™ï¸ Setting")
+st.sidebar.write("### ⚙️ Setting")
 if is_admin_user():
     with st.sidebar.expander("Account Management", expanded=False):
         users = load_app_users()
@@ -1173,7 +1173,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.write("<h2 style='text-align: left; color: #000000;'> ðŸ“Š Yoon Waddy Dashboard</h2>", unsafe_allow_html=True)
+st.write("<h2 style='text-align: left; color: #000000;'>📊 Yoon Waddy Dashboard</h2>", unsafe_allow_html=True)
 
 with st.container(border=True):
     dash_col1, dash_col2, dash_col3 = st.columns([2, 2, 2])
@@ -1181,7 +1181,7 @@ with st.container(border=True):
     d_end = dash_col2.date_input("Dash End Date", value=date.today(), key="de_key")
     dash_col3.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
 
-    if dash_col3.button("ðŸ” Search Dash", use_container_width=True, type="primary"):
+    if dash_col3.button("🔍 Search Dash", use_container_width=True, type="primary"):
         st.rerun()
 
     # --- Filter Logic ---
@@ -1207,7 +1207,7 @@ with st.container(border=True):
     # á€™á€»á€€á€ºá€œá€¯á€¶á€¸á€á€œá€¯á€á€º (Show/Hide Values) -----
     d_col_title, d_col_eye = st.columns([0.92, 0.08])
     with d_col_eye:
-        icon = "ðŸ‘ï¸" if st.session_state.show_values else "ðŸ™ˆ" 
+        icon = "👁️" if st.session_state.show_values else "🙈" 
         if st.button(icon, key="dash_eye"):
             st.session_state.show_values = not st.session_state.show_values
             st.rerun()
@@ -1240,7 +1240,7 @@ with st.container(border=True):
 
 # HH_1 >>> New Transaction Area -----
 st.markdown('<div id="new-transaction" class="mobile-page-anchor mobile-section-marker" data-section="new"></div>', unsafe_allow_html=True)
-st.write("#### âž• New Transaction")
+st.write("#### ➕ New Transaction")
 r1_c1, r1_c2, r1_c3 = st.columns([1, 1, 1])
 add_new_options = ["+ Add New"] if has_permission("add_new_names") else []
 
@@ -1449,7 +1449,7 @@ if st.button("Save Transaction", use_container_width=True, type="primary"):
 
 # KK_1 >>> History Table (Cloud Version) -----
 st.markdown('<div id="history" class="mobile-page-anchor mobile-section-marker" data-section="history"></div>', unsafe_allow_html=True)
-st.write("#### ðŸ“‹ Transaction History")
+st.write("#### 📋 Transaction History")
 
 if not df.empty:
     # Filter á€™á€»á€¬á€¸á€€á€­á€¯ á€á€…á€ºá€á€”á€ºá€¸á€á€Šá€ºá€¸á€•á€¼á€á€¼á€„á€ºá€¸
@@ -1467,7 +1467,7 @@ if not df.empty:
         h_end = h_col2.date_input("End Date", value=date.today(), key="h_end_val")
     
         h_col3.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        history_search = h_col3.button("ðŸ” Search", use_container_width=True, type="primary")    
+        history_search = h_col3.button("🔍 Search", use_container_width=True, type="primary")    
 
         h_col4.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
         edit_btn = h_col4.button("📝 Edit", use_container_width=True, type="secondary", disabled=not has_permission("edit_history"))
@@ -1501,7 +1501,7 @@ if not df.empty:
         st.markdown(
             f"""
             <div style="border-left: 4px solid #ff4b4b; background: #f8fafc; padding: 12px 14px; border-radius: 8px; font-weight: 700;">
-                ðŸ“Š Filtered Total Sales: <span style="color:#ff4b4b;">{filtered_total_sales:,.0f} THB</span>
+                📊 Filtered Total Sales: <span style="color:#ff4b4b;">{filtered_total_sales:,.0f} THB</span>
             </div>
             """,
             unsafe_allow_html=True
@@ -1510,7 +1510,7 @@ if not df.empty:
         st.markdown(
             f"""
             <div style="border-left: 4px solid #0ea5e9; background: #f8fafc; padding: 12px 14px; border-radius: 8px; font-weight: 700;">
-                ðŸ›’ Filtered Total Purchases: <span style="color:#0b84f3;">{filtered_total_purchases:,.0f} THB</span>
+                🛒 Filtered Total Purchases: <span style="color:#0b84f3;">{filtered_total_purchases:,.0f} THB</span>
             </div>
             """,
             unsafe_allow_html=True
