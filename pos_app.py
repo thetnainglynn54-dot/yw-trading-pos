@@ -51,7 +51,7 @@ PERMISSIONS = {
     "edit_history": "Edit transaction history",
     "delete_history": "Delete transaction history",
     "print_history": "Print receipts",
-    "edit_names": "Rename brand/category/item/customer/payment",
+    "edit_names": "Edit names",
     "rebuild_stocks": "Rebuild all stocks",
     "view_stock_profit": "View stock balance and profit",
 }
@@ -226,7 +226,7 @@ try:
 except ImportError:
     st.set_page_config(layout="wide", page_title="YW Trading")
     # Cloud á€•á€±á€«á€ºá€™á€¾á€¬ Assets folder á€™á€•á€«á€›á€„á€º warning á€™á€•á€¼á€˜á€² á€„á€¼á€­á€™á€ºá€”á€±á€…á€±á€á€»á€„á€ºá€›á€„á€º á€¡á€±á€¬á€€á€ºá€€á€…á€¬á€€á€¼á€±á€¬á€„á€ºá€¸á€€á€­á€¯ comment á€•á€­á€á€ºá€‘á€¬á€¸á€”á€­á€¯á€„á€ºá€•á€«á€á€šá€º
-    # st.warning("âš ï¸ Logo file NOT found")
+    # st.warning("⚠️ Logo file NOT found")
 
 # AA_2 >>> CSS -----
 st.markdown("""
@@ -499,7 +499,7 @@ if not st.session_state.logged_in:
                     else:
                         st.error("Wrong Password")
                 else:
-                    st.warning("âš ï¸ Password must be 6 digits (0-9) only")
+                    st.warning("⚠️ Password must be 6 digits (0-9) only")
     st.stop()
 
 
@@ -557,7 +557,7 @@ def rebuild_all_stock():
     conn.update(data=all_df)
     clear_data_cache()
     
-    st.success("âœ… Stock á€¡á€¬á€¸á€œá€¯á€¶á€¸á€€á€­á€¯ á€¡á€±á€¬á€„á€ºá€™á€¼á€„á€ºá€…á€½á€¬ á€•á€¼á€”á€ºá€œá€Šá€ºá€á€½á€€á€ºá€á€»á€€á€ºá€•á€¼á€®á€¸á€•á€«á€•á€¼á€®á‹")
+    st.success("✅ Stock အားလုံးကို အောင်မြင်စွာ ပြန်လည်တွက်ချက်ပြီးပါပြီ။")
 
 
 # DD_1 >>> Google Sheets á€™á€¾ Data á€€á€­á€¯ DataFrame á€¡á€–á€¼á€…á€º á€–á€á€ºá€šá€°á€á€¼á€„á€ºá€¸ -----
@@ -601,7 +601,7 @@ def load_data():
             return pd.DataFrame(columns=cols)
 
     except Exception as e:
-        st.error(f"âŒ Data Loading Error: {e}")
+        st.error(f"❌ Data Loading Error: {e}")
         # Error á€á€€á€ºá€œá€»á€¾á€„á€ºá€œá€Šá€ºá€¸ structure á€™á€•á€»á€€á€ºá€¡á€±á€¬á€„á€º column á€¡á€œá€½á€á€ºá€™á€»á€¬á€¸ á€•á€¼á€”á€ºá€•á€±á€¸á€•á€«
         cols = ["Date", "Customer", "Payment", "Brand", "Category", "Item", 
                 "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Sale Price", 
@@ -838,15 +838,15 @@ if not df.empty and has_permission("edit_names"):
                         conn.update(data=all_df)
                         clear_data_cache()
                         
-                        st.success(f"âœ… Updated {edit_type} to '{new_val}'!")
+                        st.success(f"✅ Updated {edit_type} to '{new_val}'!")
                         st.session_state.edit_names_reset_key = edit_reset_key + 1
                         st.session_state.reset_trigger = True
                         st.rerun()
                         
                     except Exception as e:
-                        st.error(f"âŒ Error: {e}")
+                        st.error(f"❌ Error: {e}")
                 else:
-                    st.warning("âš ï¸ á€”á€¬á€™á€Šá€ºá€¡á€žá€…á€º á€›á€­á€¯á€€á€ºá€‘á€Šá€·á€ºá€•á€±á€¸á€•á€«á‹")
+                    st.warning("⚠️ နာမည်အသစ် ရိုက်ထည့်ပေးပါ။")
 
 # FF_3 >>> Cloud Security Section (Using Secrets Note) -----
 with st.sidebar:
@@ -876,7 +876,7 @@ with st.sidebar:
     st.markdown('<div class="sidebar-bottom-spacer"></div>', unsafe_allow_html=True)
     st.markdown("---")
     if has_permission("rebuild_stocks") and st.button("Rebuild All Stocks", use_container_width=True):
-        with st.spinner("ðŸ”„ á€…á€¬á€›á€„á€ºá€¸á€¡á€¬á€¸á€œá€¯á€¶á€¸á€€á€­á€¯ á€•á€¼á€”á€ºá€œá€Šá€ºá€á€½á€€á€ºá€á€»á€€á€ºá€”á€±á€•á€«á€žá€Šá€º..."):
+        with st.spinner("🔄 စာရင်းအားလုံးကို ပြန်လည်တွက်ချက်နေပါသည်..."):
             rebuild_all_stock()
         st.success("All stock rebuilt successfully.")
         st.rerun()
@@ -1306,9 +1306,9 @@ if f_item and f_item not in ["Choose Item", "+ Add New", ""]:
 # UI á€•á€±á€«á€ºá€á€½á€„á€º á€œá€€á€ºá€›á€¾á€­ Stock á€•á€¼á€žá€á€¼á€„á€ºá€¸
 if f_item and f_item not in ["Choose Item", "+ Add New", ""]:
     if l_stock <= 0:
-        st.error(f"âŒ Current Stock for **{f_item}** : **{l_stock:,.0f}** (Out of Stock)")
+        st.error(f"❌ Current Stock for **{f_item}** : **{l_stock:,.0f}** (Out of Stock)")
     else:
-        st.info(f"ðŸ’¡ Current Stock for **{f_item}** : **{l_stock:,.0f}** units")
+        st.info(f"💡 Current Stock for **{f_item}** : **{l_stock:,.0f}** units")
 
 # á€¡á€œá€­á€¯á€¡á€œá€»á€±á€¬á€€á€º á€ˆá€±á€¸á€”á€¾á€¯á€”á€ºá€¸á€–á€¼á€Šá€·á€ºá€•á€±á€¸á€™á€Šá€·á€º Logic
 def update_input_fields():
@@ -1392,18 +1392,18 @@ if st.button("Save Transaction", use_container_width=True, type="primary"):
         st.stop()
     # áá‹ á€¡á€›á€±á€¬á€„á€ºá€¸á€žá€½á€„á€ºá€¸á€œá€»á€¾á€„á€º Stock á€›á€¾á€­á€™á€›á€¾á€­ á€¡á€›á€„á€ºá€…á€…á€ºá€™á€Šá€º
     if s_qty > 0 and l_stock < s_qty:
-        st.error(f"âŒ á€œá€€á€ºá€€á€»á€”á€º Stock ({l_stock:,.0f}) á€‘á€€á€º á€•á€­á€¯á€›á€±á€¬á€„á€ºá€¸áá€™á€›á€•á€«á‹")
+        st.error(f"❌ လက်ကျန် Stock ({l_stock:,.0f}) ထက် ပိုရောင်း၍ မရပါ။")
         st.stop()
 
     # á‚á‹ á€¡á€”á€¾á€¯á€á€ºá€‚á€á€”á€ºá€¸á€™á€»á€¬á€¸ á€™á€á€„á€ºá€¡á€±á€¬á€„á€º á€€á€¬á€€á€½á€šá€ºá€á€¼á€„á€ºá€¸
     if p_qty < 0 or s_qty < 0 or f_inc_val < 0 or f_exp_val < 0:
-        st.error("âŒ Quantity á€žá€­á€¯á€·á€™á€Ÿá€¯á€á€º Amount á€™á€»á€¬á€¸á€žá€Šá€º á€¡á€”á€¾á€¯á€á€ºá€‚á€á€”á€ºá€¸ (Negative) á€™á€–á€¼á€…á€ºá€›á€•á€«á‹")
+        st.error("❌ Quantity သို့မဟုတ် Amount များသည် အနုတ်ဂဏန်း (Negative) မဖြစ်ရပါ။")
         st.stop()
 
     # áƒá‹ á€¡á€”á€Šá€ºá€¸á€†á€¯á€¶á€¸ á€¡á€á€»á€€á€ºá€¡á€œá€€á€º á€á€…á€ºá€á€¯á€á€¯ á€•á€«á€á€„á€ºá€™á€¾ á€žá€­á€™á€ºá€¸á€™á€Šá€º
     elif (f_item or f_inc_val > 0 or f_exp_val > 0):
         try:
-            with st.spinner("â˜ï¸ Cloud á€•á€±á€«á€ºá€žá€­á€¯á€· á€žá€­á€™á€ºá€¸á€†á€Šá€ºá€¸á€”á€±á€•á€«á€žá€Šá€º..."):
+            with st.spinner("☁️ Cloud ပေါ်သို့ သိမ်းဆည်းနေပါသည်..."):
                 before_amt = float(l_stock) if f_item and f_item != "-" else 0.0
                 after_stock = max((before_amt + float(p_qty)) - float(s_qty), 0.0)
                 balance = after_stock * float(p_pr) if float(p_pr) > 0 else 0.0
@@ -1436,14 +1436,14 @@ if st.button("Save Transaction", use_container_width=True, type="primary"):
 
                 # á…á‹ á€•á€¼á€®á€¸á€†á€¯á€¶á€¸á€€á€¼á€±á€¬á€„á€ºá€¸ á€¡á€žá€­á€•á€±á€¸á€•á€¼á€®á€¸ UI Reset á€œá€¯á€•á€ºá€™á€Šá€º
                 st.session_state.reset_trigger = True
-                st.success("âœ… á€…á€¬á€›á€„á€ºá€¸á€€á€­á€¯ Cloud á€•á€±á€«á€ºá€žá€­á€¯á€· á€žá€­á€™á€ºá€¸á€†á€Šá€ºá€¸á€•á€¼á€®á€¸ Stock á€•á€¼á€”á€ºá€œá€Šá€ºá€á€½á€€á€ºá€á€»á€€á€ºá€•á€¼á€®á€¸á€•á€«á€•á€¼á€®!")
+                st.success("✅ စာရင်းကို Cloud ပေါ်သို့ သိမ်းဆည်းပြီး Stock ပြန်လည်တွက်ချက်ပြီးပါပြီ!")
                 st.rerun()
 
         except Exception as e:
-            st.error(f"âŒ Google Sheets Error: {e}")
+            st.error(f"❌ Google Sheets Error: {e}")
         
     else:
-        st.warning("âš ï¸ á€žá€­á€™á€ºá€¸á€†á€Šá€ºá€¸á€›á€”á€º á€¡á€á€»á€€á€ºá€¡á€œá€€á€ºá€™á€»á€¬á€¸ á€•á€¼á€Šá€·á€ºá€…á€¯á€¶á€…á€½á€¬ á€–á€¼á€Šá€·á€ºá€…á€½á€€á€ºá€•á€±á€¸á€•á€«á‹")
+        st.warning("⚠️ သိမ်းဆည်းရန် အချက်အလက်များ ပြည့်စုံစွာ ဖြည့်စွက်ပေးပါ။")
 
 
 
@@ -1539,7 +1539,7 @@ if not df.empty:
     )
 
     # LL_1 >>> EDIT DIALOG (Cloud Version) -----
-    @st.dialog("ðŸ“ Edit Transaction Record")
+    @st.dialog("📝 Edit Transaction Record")
     def edit_transaction_dialog(row_data, original_idx):
         target_idx = int(original_idx)
         target_item = str(row_data["Item"])
@@ -1645,7 +1645,7 @@ if not df.empty:
                 st.error(f"Update Error: {e}")
 
     # LL_2 >>> DELETE DIALOG (Cloud Version) -----
-    @st.dialog("âš ï¸ Confirm Delete")
+    @st.dialog("⚠️ Confirm Delete")
     def delete_confirmation_dialog(selected_df):
         st.warning(f"Delete {len(selected_df)} selected records?")
         confirm_pw = st.text_input("Current Account Password", type="password")
