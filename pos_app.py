@@ -474,7 +474,15 @@ if not st.session_state.logged_in:
     _, col_login, _ = st.columns([1, 1.5, 1])
     with col_login:
         with st.container(border=True):
-            user_input = st.text_input("Username", value="admin")
+            login_users = load_app_users()
+            login_accounts = ["admin"] + sorted(
+                [
+                    username
+                    for username, user_data in login_users.items()
+                    if user_data.get("active", True)
+                ]
+            )
+            user_input = st.selectbox("Account", login_accounts, key="login_account")
             pass_input = st.text_input("Password", type="password", placeholder="000000")
             
             st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
