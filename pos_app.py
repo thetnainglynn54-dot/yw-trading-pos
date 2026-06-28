@@ -238,12 +238,9 @@ st.markdown("""
     }
     #MainMenu,
     footer,
-    header [data-testid="stToolbar"],
-    [data-testid="stToolbar"],
     [data-testid="stToolbarActions"],
     [data-testid="stDeployButton"],
     [data-testid="stStatusWidget"],
-    [data-testid="stDecoration"],
     .stDeployButton,
     .stStatusWidget {
         display: none !important;
