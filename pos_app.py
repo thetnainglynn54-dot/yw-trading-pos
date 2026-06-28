@@ -47,6 +47,7 @@ def update_admin_password(new_password):
 
 PERMISSIONS = {
     "new_transaction": "Save new transactions",
+    "change_transaction_date": "Change new transaction date",
     "add_new_names": "Use + Add New fields",
     "edit_history": "Edit transaction history",
     "delete_history": "Delete transaction history",
@@ -1245,7 +1246,12 @@ r1_c1, r1_c2, r1_c3 = st.columns([1, 1, 1])
 add_new_options = ["+ Add New"] if has_permission("add_new_names") else []
 
 with r1_c1:
-    tr_date = st.date_input("Date", date.today(), key="tr_date_key")
+    tr_date = st.date_input(
+        "Date",
+        date.today(),
+        key="tr_date_key",
+        disabled=not has_permission("change_transaction_date"),
+    )
 
 with r1_c2:
     cust_list = sorted([str(x) for x in df["Customer"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else []
