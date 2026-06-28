@@ -236,6 +236,20 @@ st.markdown("""
     .stApp {
         background-color: #FFFFFF !important;
     }
+    #MainMenu,
+    footer,
+    header [data-testid="stToolbar"],
+    [data-testid="stToolbar"],
+    [data-testid="stToolbarActions"],
+    [data-testid="stDeployButton"],
+    [data-testid="stStatusWidget"],
+    [data-testid="stDecoration"],
+    .stDeployButton,
+    .stStatusWidget {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+    }
     /* Login á€á€œá€¯á€á€ºá€€á€­á€¯ á€¡á€•á€¼á€¬á€›á€±á€¬á€„á€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€›á€”á€º */
     div.stButton > button:first-child[kind="primary"] {
         background-color: #007bff !important;
