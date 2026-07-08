@@ -12,37 +12,34 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 EXPECTED_COLS = ["Date", "Customer", "Payment", "Brand", "Category", "Item",
                  "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Sale Price",
                  "Stock", "Balance", "Other Income", "Expense"]
+USERS_WORKSHEET = "users"
+USERS_COLS = ["username", "password_hash", "password_salt", "active", "permissions", "role"]
 
 
 def clear_data_cache():
     st.cache_data.clear()
 
 
-def update_admin_password(new_password):
-    secrets_path = os.path.join(os.path.dirname(__file__), ".streamlit", "secrets.toml")
-    if not os.path.exists(secrets_path):
-        raise RuntimeError(
-            "Password changes are disabled on hosted deployments. "
-            "Update admin_password in your hosting secret manager instead."
-        )
+def hash_password(password, salt=""):
+    if salt:
+        return hashlib.pbkdf2_hmac(
+            "sha256",
+            str(password).encode("utf-8"),
+            str(salt).encode("utf-8"),
+            120000,
+        ).hex()
+    return hashlib.sha256(str(password).encode("utf-8")).hexdigest()
 
-    password_line = f'admin_password = "{new_password}"'
 
-    with open(secrets_path, "r", encoding="utf-8") as f:
-        lines = f.read().splitlines()
+def new_password_record(password):
+    salt = os.urandom(16).hex()
+    return {"password_hash": hash_password(password, salt), "password_salt": salt}
 
-    replaced = False
-    for i, line in enumerate(lines):
-        if line.strip().startswith("admin_password"):
-            lines[i] = password_line
-            replaced = True
-            break
 
-    if not replaced:
-        lines.insert(0, password_line)
-
-    with open(secrets_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines).rstrip() + "\n")
+def password_matches(password, user_data):
+    salt = user_data.get("password_salt", "")
+    stored_hash = user_data.get("password_hash", "")
+    return stored_hash == hash_password(password, salt)
 
 
 PERMISSIONS = {
@@ -62,11 +59,36 @@ def users_file_path():
     return os.path.join(os.path.dirname(__file__), ".streamlit", "users.json")
 
 
-def hash_password(password):
-    return hashlib.sha256(str(password).encode("utf-8")).hexdigest()
+def get_users_worksheet(create=False):
+    spreadsheet = conn.client._open_spreadsheet(spreadsheet=conn.client._spreadsheet)
+    try:
+        return spreadsheet.worksheet(USERS_WORKSHEET)
+    except Exception:
+        if not create:
+            return None
+        return spreadsheet.add_worksheet(
+            title=USERS_WORKSHEET,
+            rows=200,
+            cols=len(USERS_COLS),
+        )
 
 
-def load_app_users():
+def parse_permissions(value):
+    if isinstance(value, list):
+        return value
+    if value is None:
+        return []
+    text = str(value).strip()
+    if not text:
+        return []
+    try:
+        parsed = json.loads(text)
+        return parsed if isinstance(parsed, list) else []
+    except Exception:
+        return [item.strip() for item in text.split(",") if item.strip()]
+
+
+def load_local_app_users():
     path = users_file_path()
     if not os.path.exists(path):
         return {}
@@ -78,11 +100,71 @@ def load_app_users():
         return {}
 
 
+def load_app_users():
+    try:
+        worksheet = get_users_worksheet(create=False)
+        if worksheet is None:
+            local_users = load_local_app_users()
+            if local_users:
+                try:
+                    save_app_users(local_users)
+                except Exception:
+                    pass
+            return local_users
+
+        records = worksheet.get_all_records()
+        users = {}
+        for record in records:
+            username = str(record.get("username", "")).strip()
+            if not username:
+                continue
+            users[username] = {
+                "password_hash": str(record.get("password_hash", "")).strip(),
+                "password_salt": str(record.get("password_salt", "")).strip(),
+                "active": str(record.get("active", "TRUE")).strip().lower() not in ["false", "0", "no"],
+                "permissions": parse_permissions(record.get("permissions", "")),
+                "role": str(record.get("role", "user")).strip() or "user",
+            }
+        return users
+    except Exception:
+        return load_local_app_users()
+
+
 def save_app_users(users):
-    path = users_file_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(users, f, indent=2, ensure_ascii=False)
+    worksheet = get_users_worksheet(create=True)
+    rows = [USERS_COLS]
+    for username, user_data in sorted(users.items()):
+        rows.append([
+            username,
+            user_data.get("password_hash", ""),
+            user_data.get("password_salt", ""),
+            "TRUE" if user_data.get("active", True) else "FALSE",
+            json.dumps(user_data.get("permissions", []), ensure_ascii=False),
+            user_data.get("role", "user"),
+        ])
+    worksheet.clear()
+    worksheet.update(values=rows, range_name="A1", value_input_option="USER_ENTERED")
+
+
+def update_admin_password(new_password):
+    users = load_app_users()
+    admin_data = users.get("admin", {})
+    admin_data.update(new_password_record(new_password))
+    admin_data["permissions"] = list(PERMISSIONS.keys())
+    admin_data["active"] = True
+    admin_data["role"] = "admin"
+    users["admin"] = admin_data
+    save_app_users(users)
+
+
+def update_current_user_password(username, new_password):
+    users = load_app_users()
+    user_data = users.get(username)
+    if not user_data:
+        raise RuntimeError("Account not found.")
+    user_data.update(new_password_record(new_password))
+    users[username] = user_data
+    save_app_users(users)
 
 
 def is_admin_user():
@@ -104,12 +186,20 @@ def require_permission(permission):
 
 def login_app_user(username, password):
     username = str(username).strip()
+    users = load_app_users()
     if username == "admin":
+        admin_user = users.get("admin")
+        if admin_user and admin_user.get("active", True) and password_matches(password, admin_user):
+            return {
+                "username": "admin",
+                "role": "admin",
+                "permissions": list(PERMISSIONS.keys()),
+            }
         try:
             admin_password = st.secrets.get("admin_password", "123456")
         except Exception:
             admin_password = "123456"
-        if str(password) == str(admin_password):
+        if not admin_user and str(password) == str(admin_password):
             return {
                 "username": "admin",
                 "role": "admin",
@@ -117,13 +207,11 @@ def login_app_user(username, password):
             }
         return None
 
-    users = load_app_users()
     user = users.get(username)
     if not user or not user.get("active", True):
         return None
 
-    stored_hash = user.get("password_hash", "")
-    if stored_hash != hash_password(password):
+    if not password_matches(password, user):
         return None
 
     return {
@@ -146,17 +234,45 @@ def as_sheet_value(value):
     return value
 
 
+def product_key_from_row(row):
+    return (str(row.get("Brand", "")), str(row.get("Category", "")), str(row.get("Item", "")))
+
+
+def unique_product_keys(frame):
+    if frame is None or frame.empty:
+        return []
+    keys = []
+    seen = set()
+    for _, row in frame.iterrows():
+        key = product_key_from_row(row)
+        if not key[2] or key[2] == "-" or key in seen:
+            continue
+        seen.add(key)
+        keys.append(key)
+    return keys
+
+
 def recalculate_items_in_df(all_df, items):
     numeric_cols = ["Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Stock", "Balance"]
     for col in numeric_cols:
         if col in all_df.columns:
             all_df[col] = pd.to_numeric(all_df[col], errors="coerce").fillna(0.0)
 
-    for item_name in items:
+    for item_key in items:
+        if isinstance(item_key, (tuple, list)) and len(item_key) == 3:
+            brand_name, cat_name, item_name = [str(x) for x in item_key]
+            item_mask = (
+                (all_df["Brand"].astype(str) == brand_name)
+                & (all_df["Category"].astype(str) == cat_name)
+                & (all_df["Item"].astype(str) == item_name)
+            )
+        else:
+            item_name = str(item_key)
+            item_mask = all_df["Item"].astype(str) == item_name
+
         if not item_name or str(item_name).strip() == "-":
             continue
 
-        item_mask = all_df["Item"] == item_name
         running_stock = 0.0
         item_indices = list(all_df.index[item_mask])
 
@@ -479,7 +595,7 @@ if not st.session_state.logged_in:
                 [
                     username
                     for username, user_data in login_users.items()
-                    if user_data.get("active", True)
+                    if username != "admin" and user_data.get("active", True)
                 ]
             )
             user_input = st.selectbox("Account", login_accounts, key="login_account")
@@ -558,20 +674,20 @@ def rebuild_all_stock():
         st.warning("No data found to rebuild.")
         return
 
-    required_cols = ["Item", "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Stock", "Balance"]
+    required_cols = ["Brand", "Category", "Item", "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Stock", "Balance"]
     missing_cols = [col for col in required_cols if col not in all_df.columns]
     if missing_cols:
         st.error(f"Missing columns: {', '.join(missing_cols)}")
         return
 
-    items = [item for item in all_df["Item"].dropna().unique() if str(item).strip() != "-"]
+    items = unique_product_keys(all_df)
     if not items:
         st.warning("No item rows found to rebuild.")
         return
 
     progress_bar = st.progress(0.0)
-    for i, item_name in enumerate(items):
-        all_df = recalculate_items_in_df(all_df, [item_name])
+    for i, item_key in enumerate(items):
+        all_df = recalculate_items_in_df(all_df, [item_key])
         progress_bar.progress((i + 1) / len(items))
 
     conn.update(data=all_df)
@@ -741,6 +857,7 @@ st.sidebar.write("### ⚙️ Setting")
 if is_admin_user():
     with st.sidebar.expander("Account Management", expanded=False):
         users = load_app_users()
+        managed_users = {k: v for k, v in users.items() if k != "admin"}
         st.caption("Admin only")
 
         st.markdown("**Create account**")
@@ -764,9 +881,10 @@ if is_admin_user():
                 st.warning("Password must be 6 digits")
             else:
                 users[clean_username] = {
-                    "password_hash": hash_password(new_password),
+                    **new_password_record(new_password),
                     "permissions": selected_permissions,
                     "active": True,
+                    "role": "user",
                 }
                 save_app_users(users)
                 st.success(f"Created account: {clean_username}")
@@ -775,8 +893,8 @@ if is_admin_user():
 
         st.markdown("---")
         st.markdown("**Manage accounts**")
-        if users:
-            manage_user = st.selectbox("Select account", sorted(users.keys()), key="acct_manage_user")
+        if managed_users:
+            manage_user = st.selectbox("Select account", sorted(managed_users.keys()), key="acct_manage_user")
             user_data = users.get(manage_user, {})
             is_active = st.checkbox("Active", value=user_data.get("active", True), key=f"acct_active_{manage_user}")
             updated_permissions = []
@@ -796,7 +914,7 @@ if is_admin_user():
                     users[manage_user]["active"] = is_active
                     users[manage_user]["permissions"] = updated_permissions
                     if reset_password:
-                        users[manage_user]["password_hash"] = hash_password(reset_password)
+                        users[manage_user].update(new_password_record(reset_password))
                     save_app_users(users)
                     st.success("Account updated")
                     st.rerun()
@@ -853,7 +971,7 @@ if not df.empty and has_permission("edit_names"):
                         # áƒá‹ Cloud á€•á€±á€«á€ºá€žá€­á€¯á€· Update á€œá€¯á€•á€ºá€•á€«
                         # á„á‹ Item á€¡á€™á€Šá€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€œá€²á€á€¼á€„á€ºá€¸á€–á€¼á€…á€ºá€•á€«á€€ Stock á€™á€»á€¬á€¸á€€á€­á€¯ á€•á€¼á€”á€ºá€Šá€¾á€­á€•á€«
                         if edit_type == "Item":
-                            all_df = recalculate_items_in_df(all_df, [new_val])
+                            all_df = recalculate_items_in_df(all_df, [(sel_b, sel_c, new_val)])
 
                         conn.update(data=all_df)
                         clear_data_cache()
@@ -871,6 +989,7 @@ if not df.empty and has_permission("edit_names"):
 # FF_3 >>> Cloud Security Section (Using Secrets Note) -----
 with st.sidebar:
     with st.expander("Security"):
+        current_account = st.session_state.get("current_user", "admin")
         current_pw = st.session_state.get("password", st.secrets.get("admin_password", "123456"))
         old_pw = st.text_input("Current Password", type="password", key="security_old_pw")
         new_pw = st.text_input("New Password", type="password", key="security_new_pw")
@@ -885,7 +1004,10 @@ with st.sidebar:
                 st.error("New passwords do not match")
             else:
                 try:
-                    update_admin_password(new_pw)
+                    if current_account == "admin":
+                        update_admin_password(new_pw)
+                    else:
+                        update_current_user_password(current_account, new_pw)
                     st.session_state["password"] = new_pw
                     st.success("Password changed successfully")
                 except Exception as e:
@@ -895,11 +1017,43 @@ with st.sidebar:
 with st.sidebar:
     st.markdown('<div class="sidebar-bottom-spacer"></div>', unsafe_allow_html=True)
     st.markdown("---")
-    if has_permission("rebuild_stocks") and st.button("Rebuild All Stocks", use_container_width=True):
-        with st.spinner("🔄 စာရင်းအားလုံးကို ပြန်လည်တွက်ချက်နေပါသည်..."):
-            rebuild_all_stock()
-        st.success("All stock rebuilt successfully.")
-        st.rerun()
+    if has_permission("rebuild_stocks"):
+        with st.expander("Rebuild Stocks", expanded=False):
+            if not df.empty:
+                rb_brands = sorted([str(x) for x in df["Brand"].dropna().unique() if str(x) not in ["-", "nan", ""]])
+                rb_brand = st.selectbox("Brand", rb_brands, key="rebuild_brand") if rb_brands else ""
+                rb_categories = sorted([
+                    str(x)
+                    for x in df[df["Brand"].astype(str) == rb_brand]["Category"].dropna().unique()
+                    if str(x) not in ["-", "nan", ""]
+                ])
+                rb_category = st.selectbox("Category", rb_categories, key="rebuild_category") if rb_categories else ""
+                rb_items = sorted([
+                    str(x)
+                    for x in df[
+                        (df["Brand"].astype(str) == rb_brand)
+                        & (df["Category"].astype(str) == rb_category)
+                    ]["Item"].dropna().unique()
+                    if str(x) not in ["-", "nan", ""]
+                ])
+                rb_item = st.selectbox("Item", rb_items, key="rebuild_item") if rb_items else ""
+
+                if st.button("Rebuild Selected Item", use_container_width=True, type="primary"):
+                    if rb_brand and rb_category and rb_item:
+                        all_df = conn.read(ttl=60)
+                        all_df = recalculate_items_in_df(all_df, [(rb_brand, rb_category, rb_item)])
+                        conn.update(data=all_df)
+                        clear_data_cache()
+                        st.success(f"✅ Rebuilt {rb_item}")
+                        st.rerun()
+                    else:
+                        st.warning("Select brand, category and item.")
+
+            if st.button("Rebuild All Stocks", use_container_width=True):
+                with st.spinner("🔄 စာရင်းအားလုံးကို ပြန်လည်တွက်ချက်နေပါသည်..."):
+                    rebuild_all_stock()
+                st.success("All stock rebuilt successfully.")
+                st.rerun()
 
 # FF_5 >>> Sidebar Logout Section ------
 with st.sidebar:
@@ -1568,6 +1722,7 @@ if not df.empty:
     def edit_transaction_dialog(row_data, original_idx):
         target_idx = int(original_idx)
         target_item = str(row_data["Item"])
+        target_product_key = product_key_from_row(row_data)
 
         st.write(f"Editing Item: {target_item}")
 
@@ -1659,7 +1814,7 @@ if not df.empty:
                 all_df.loc[target_idx, "Sale Qty"] = float(new_s_qty)
                 all_df.loc[target_idx, "Sale Price"] = float(new_s_price)
 
-                all_df = recalculate_items_in_df(all_df, [target_item])
+                all_df = recalculate_items_in_df(all_df, [target_product_key])
                 conn.update(data=all_df)
                 clear_data_cache()
 
@@ -1682,7 +1837,7 @@ if not df.empty:
                 indices_to_drop = [int(idx) for idx in selected_df["Original_Index"].tolist()]
                 all_df = all_df.drop(indices_to_drop)
             
-                affected_items = [item for item in selected_df["Item"].unique() if item != "-"]
+                affected_items = unique_product_keys(selected_df)
                 all_df = recalculate_items_in_df(all_df, affected_items)
                 conn.update(data=all_df)
                 clear_data_cache()
