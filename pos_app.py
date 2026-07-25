@@ -11,7 +11,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 EXPECTED_COLS = ["Date", "Customer", "Payment", "Brand", "Category", "Item",
                  "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Sale Price",
-                 "Stock", "Balance", "Other Income", "Expense"]
+                 "Stock", "Balance", "Other Income", "Expense", "Created By"]
 USERS_WORKSHEET = "users"
 USERS_COLS = ["username", "password_hash", "password_salt", "active", "permissions", "role"]
 
@@ -706,11 +706,13 @@ def load_data():
             # á‚á‹ Column á€¡á€™á€Šá€ºá€™á€»á€¬á€¸ á€á€°á€Šá€®á€™á€¾á€¯á€›á€¾á€­á€…á€±á€›á€”á€º á€žá€á€ºá€™á€¾á€á€ºá€á€¼á€„á€ºá€¸ 
             # (Google Sheet á€á€½á€„á€º rowid á€™á€›á€¾á€­á€žá€–á€¼á€„á€·á€º Index á€€á€­á€¯á€žá€¬ ID á€¡á€–á€¼á€…á€º á€žá€¯á€¶á€¸á€•á€«á€™á€Šá€º)
             # Column á€•á€±á€«á€„á€ºá€¸ áá… á€á€¯ (ID á€™á€•á€«á€˜á€²)
-            expected_cols = ["Date", "Customer", "Payment", "Brand", "Category", "Item", 
-                             "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Sale Price", 
-                             "Stock", "Balance", "Other Income", "Expense"]
+            expected_cols = EXPECTED_COLS
             
             # Column á€¡á€™á€Šá€ºá€™á€»á€¬á€¸ á€œá€½á€²á€á€»á€±á€¬á€ºá€”á€±á€•á€«á€€ á€•á€¼á€”á€ºá€Šá€¾á€­á€•á€±á€¸á€á€¼á€„á€ºá€¸
+            if len(df.columns) < len(expected_cols):
+                for col in expected_cols[len(df.columns):]:
+                    df[col] = ""
+            df = df.iloc[:, :len(expected_cols)]
             df.columns = expected_cols
             df["Original_Index"] = df.index
             
@@ -731,18 +733,12 @@ def load_data():
             
         else:
             # Data á€™á€›á€¾á€­á€œá€»á€¾á€„á€º column á€¡á€œá€½á€á€ºá€™á€»á€¬á€¸á€–á€¼á€„á€·á€º DataFrame á€¡á€žá€…á€ºá€•á€¼á€”á€ºá€•á€±á€¸á€•á€«
-            cols = ["Date", "Customer", "Payment", "Brand", "Category", "Item", 
-                    "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Sale Price", 
-                    "Stock", "Balance", "Other Income", "Expense"]
-            return pd.DataFrame(columns=cols)
+            return pd.DataFrame(columns=EXPECTED_COLS)
 
     except Exception as e:
         st.error(f"❌ Data Loading Error: {e}")
         # Error á€á€€á€ºá€œá€»á€¾á€„á€ºá€œá€Šá€ºá€¸ structure á€™á€•á€»á€€á€ºá€¡á€±á€¬á€„á€º column á€¡á€œá€½á€á€ºá€™á€»á€¬á€¸ á€•á€¼á€”á€ºá€•á€±á€¸á€•á€«
-        cols = ["Date", "Customer", "Payment", "Brand", "Category", "Item", 
-                "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Sale Price", 
-                "Stock", "Balance", "Other Income", "Expense"]
-        return pd.DataFrame(columns=cols)
+        return pd.DataFrame(columns=EXPECTED_COLS)
 
 # á€™á€»á€€á€ºá€œá€¯á€¶á€¸á€á€œá€¯á€á€º á€¡á€á€¼á€±á€¡á€”á€±á€™á€¾á€á€ºá€›á€”á€º ------
 if "show_values" not in st.session_state:
@@ -1350,6 +1346,15 @@ st.markdown("""
 st.write("<h2 style='text-align: left; color: #000000;'>📊 Yoon Waddy Dashboard</h2>", unsafe_allow_html=True)
 
 with st.container(border=True):
+    current_account_name = st.session_state.get("current_user", "Unknown")
+    st.markdown(
+        f"""
+        <div style="text-align:right; font-weight:700; color:#374151; margin-bottom:0.5rem;">
+            Account: <span style="color:#0b84f3;">{current_account_name}</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     dash_col1, dash_col2, dash_col3 = st.columns([2, 2, 2])
     d_start = dash_col1.date_input("Dash Start Date", value=date.today(), key="ds_key")
     d_end = dash_col2.date_input("Dash End Date", value=date.today(), key="de_key")
@@ -1603,7 +1608,8 @@ if st.button("Save Transaction", use_container_width=True, type="primary"):
                     "Stock": after_stock,
                     "Balance": balance,
                     "Other Income": float(f_inc_val),
-                    "Expense": float(f_exp_val)
+                    "Expense": float(f_exp_val),
+                    "Created By": st.session_state.get("current_user", "Unknown")
                 }
 
                 worksheet = get_worksheet()
