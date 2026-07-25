@@ -1343,18 +1343,21 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.write("<h2 style='text-align: left; color: #000000;'>📊 Yoon Waddy Dashboard</h2>", unsafe_allow_html=True)
-
-with st.container(border=True):
-    current_account_name = st.session_state.get("current_user", "Unknown")
+current_account_name = st.session_state.get("current_user", "Unknown")
+title_col, account_col = st.columns([3, 1])
+with title_col:
+    st.write("<h2 style='text-align: left; color: #000000;'>📊 Yoon Waddy Dashboard</h2>", unsafe_allow_html=True)
+with account_col:
     st.markdown(
         f"""
-        <div style="text-align:right; font-weight:700; color:#374151; margin-bottom:0.5rem;">
+        <div style="text-align:right; font-weight:700; color:#374151; margin-top:1.05rem;">
             Account: <span style="color:#0b84f3;">{current_account_name}</span>
         </div>
         """,
         unsafe_allow_html=True
     )
+
+with st.container(border=True):
     dash_col1, dash_col2, dash_col3 = st.columns([2, 2, 2])
     d_start = dash_col1.date_input("Dash Start Date", value=date.today(), key="ds_key")
     d_end = dash_col2.date_input("Dash End Date", value=date.today(), key="de_key")
