@@ -357,25 +357,11 @@ st.markdown("""
     [data-testid="stToolbarActions"],
     [data-testid="stDeployButton"],
     [data-testid="stStatusWidget"],
-    [data-testid="stConnectionStatus"],
-    [data-testid="stNotification"],
-    [data-testid="stToastContainer"],
-    [data-testid="StyledFullScreenFrame"],
     .stDeployButton,
-    .stStatusWidget,
-    .viewerBadge_container__1QSob,
-    .viewerBadge_link__1S137,
-    .viewerBadge_text__1JaDK,
-    iframe[title="streamlit-cloud-badge"],
-    iframe[src*="streamlit"] {
+    .stStatusWidget {
         display: none !important;
         visibility: hidden !important;
         height: 0 !important;
-        width: 0 !important;
-        pointer-events: none !important;
-    }
-    div:has(> a[href*="streamlit.io/cloud"]) {
-        display: none !important;
     }
     /* Login á€á€œá€¯á€á€ºá€€á€­á€¯ á€¡á€•á€¼á€¬á€›á€±á€¬á€„á€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€›á€”á€º */
     div.stButton > button:first-child[kind="primary"] {
