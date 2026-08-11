@@ -53,6 +53,7 @@ PERMISSIONS = {
     "edit_names": "Edit names",
     "rebuild_stocks": "Rebuild all stocks",
     "view_stock_profit": "View stock balance and profit",
+    "stock_reports": "Stock reports",
 }
 
 
@@ -1181,6 +1182,8 @@ with st.sidebar:
                         all_df = recalculate_items_in_df(all_df, [(rb_brand, rb_category, rb_item)])
                         conn.update(data=all_df)
                         clear_data_cache()
+                        for key in ["rebuild_brand", "rebuild_category", "rebuild_item"]:
+                            st.session_state.pop(key, None)
                         st.success(f"✅ Rebuilt {rb_item}")
                         st.rerun()
                     else:
@@ -1189,91 +1192,107 @@ with st.sidebar:
             if st.button("Rebuild All Stocks", use_container_width=True):
                 with st.spinner("🔄 စာရင်းအားလုံးကို ပြန်လည်တွက်ချက်နေပါသည်..."):
                     rebuild_all_stock()
+                for key in ["rebuild_brand", "rebuild_category", "rebuild_item"]:
+                    st.session_state.pop(key, None)
                 st.success("All stock rebuilt successfully.")
                 st.rerun()
 
-    with st.expander("Stock Reports", expanded=False):
-        if df.empty:
-            st.info("No stock data available.")
-        else:
-            report_type = st.selectbox(
-                "Report Type",
-                ["Daily Report", "Monthly Report", "Current Stock"],
-                key="stock_report_type",
-            )
-
-            if report_type == "Monthly Report":
-                report_month = st.date_input("Month", value=date.today().replace(day=1), key="stock_report_month")
-                report_start = report_month.replace(day=1)
-                report_end = (pd.Timestamp(report_start) + pd.offsets.MonthEnd(0)).date()
-                report_title = f"Monthly Stock Report ({report_start:%Y-%m})"
-                filename_date = f"{report_start:%Y-%m}"
-            elif report_type == "Daily Report":
-                report_day = st.date_input("Report Date", value=date.today(), key="stock_report_day")
-                report_start = report_day
-                report_end = report_day
-                report_title = f"Daily Stock Report ({report_day:%Y-%m-%d})"
-                filename_date = f"{report_day:%Y-%m-%d}"
+    if has_permission("stock_reports"):
+        with st.expander("Stock Reports", expanded=False):
+            if df.empty:
+                st.info("No stock data available.")
             else:
-                report_start = df["Date"].min() if not df.empty else date.today()
-                report_end = date.today()
-                report_title = f"Current Stock Report ({report_end:%Y-%m-%d})"
-                filename_date = f"{report_end:%Y-%m-%d}"
-                st.caption(f"Up to {report_end:%Y-%m-%d}")
+                report_type = st.selectbox(
+                    "Report Type",
+                    ["Daily Report", "Monthly Report", "Current Stock"],
+                    key="stock_report_type",
+                )
 
-            stock_brands = ["All"] + sorted([
-                str(x) for x in df["Brand"].dropna().unique()
-                if str(x) not in ["", "-", "nan", "None"]
-            ])
-            stock_brand = st.selectbox("Brand", stock_brands, key="stock_report_brand")
-
-            category_source = df if stock_brand == "All" else df[df["Brand"].astype(str) == stock_brand]
-            stock_categories = ["All"] + sorted([
-                str(x) for x in category_source["Category"].dropna().unique()
-                if str(x) not in ["", "-", "nan", "None"]
-            ])
-            stock_category = st.selectbox("Category", stock_categories, key="stock_report_category")
-
-            item_source = category_source if stock_category == "All" else category_source[category_source["Category"].astype(str) == stock_category]
-            stock_items = ["All"] + sorted([
-                str(x) for x in item_source["Item"].dropna().unique()
-                if str(x) not in ["", "-", "nan", "None"]
-            ])
-            stock_item = st.selectbox("Item", stock_items, key="stock_report_item")
-
-            if st.button("Generate Stock Report", use_container_width=True, type="primary"):
-                report_df = make_stock_report(df, report_start, report_end, stock_brand, stock_category, stock_item)
-                st.session_state["stock_report_df"] = report_df
-                st.session_state["stock_report_title"] = report_title
-                st.session_state["stock_report_filename_date"] = filename_date
-                st.session_state["show_stock_report_preview"] = True
-                if report_df.empty:
-                    st.warning("No stock rows found for this report.")
+                if report_type == "Monthly Report":
+                    report_month = st.date_input("Month", value=date.today().replace(day=1), key="stock_report_month")
+                    report_start = report_month.replace(day=1)
+                    report_end = (pd.Timestamp(report_start) + pd.offsets.MonthEnd(0)).date()
+                    report_title = f"Monthly Stock Report ({report_start:%Y-%m})"
+                    filename_date = f"{report_start:%Y-%m}"
+                elif report_type == "Daily Report":
+                    report_day = st.date_input("Report Date", value=date.today(), key="stock_report_day")
+                    report_start = report_day
+                    report_end = report_day
+                    report_title = f"Daily Stock Report ({report_day:%Y-%m-%d})"
+                    filename_date = f"{report_day:%Y-%m-%d}"
                 else:
-                    st.success(f"Report ready: {len(report_df)} items")
+                    report_start = df["Date"].min() if not df.empty else date.today()
+                    report_end = date.today()
+                    report_title = f"Current Stock Report ({report_end:%Y-%m-%d})"
+                    filename_date = f"{report_end:%Y-%m-%d}"
+                    st.caption(f"Up to {report_end:%Y-%m-%d}")
 
-            report_df = st.session_state.get("stock_report_df", pd.DataFrame())
-            if not report_df.empty:
-                report_title = st.session_state.get("stock_report_title", "Stock Report")
-                filename_date = st.session_state.get("stock_report_filename_date", date.today().strftime("%Y-%m-%d"))
-                safe_type = report_type.lower().replace(" ", "_")
-                base_name = f"stock_report_{safe_type}_{filename_date}"
-                st.download_button(
-                    "Download Excel",
-                    data=dataframe_to_excel_bytes(report_df),
-                    file_name=f"{base_name}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                )
-                st.download_button(
-                    "Download CSV",
-                    data=report_df.to_csv(index=False).encode("utf-8-sig"),
-                    file_name=f"{base_name}.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
-                if st.button("Print Report", use_container_width=True):
-                    render_printable_stock_report(report_df, report_title)
+                stock_brands = ["All"] + sorted([
+                    str(x) for x in df["Brand"].dropna().unique()
+                    if str(x) not in ["", "-", "nan", "None"]
+                ])
+                stock_brand = st.selectbox("Brand", stock_brands, key="stock_report_brand")
+
+                category_source = df if stock_brand == "All" else df[df["Brand"].astype(str) == stock_brand]
+                stock_categories = ["All"] + sorted([
+                    str(x) for x in category_source["Category"].dropna().unique()
+                    if str(x) not in ["", "-", "nan", "None"]
+                ])
+                stock_category = st.selectbox("Category", stock_categories, key="stock_report_category")
+
+                item_source = category_source if stock_category == "All" else category_source[category_source["Category"].astype(str) == stock_category]
+                stock_items = ["All"] + sorted([
+                    str(x) for x in item_source["Item"].dropna().unique()
+                    if str(x) not in ["", "-", "nan", "None"]
+                ])
+                stock_item = st.selectbox("Item", stock_items, key="stock_report_item")
+
+                if st.button("Generate Stock Report", use_container_width=True, type="primary"):
+                    report_df = make_stock_report(df, report_start, report_end, stock_brand, stock_category, stock_item)
+                    st.session_state["stock_report_df"] = report_df
+                    st.session_state["stock_report_title"] = report_title
+                    st.session_state["stock_report_filename_date"] = filename_date
+                    st.session_state["show_stock_report_preview"] = True
+                    if report_df.empty:
+                        st.warning("No stock rows found for this report.")
+                    else:
+                        st.success(f"Report ready: {len(report_df)} items")
+                        st.rerun()
+
+                report_df = st.session_state.get("stock_report_df", pd.DataFrame())
+                if not report_df.empty:
+                    report_title = st.session_state.get("stock_report_title", "Stock Report")
+                    filename_date = st.session_state.get("stock_report_filename_date", date.today().strftime("%Y-%m-%d"))
+                    safe_type = report_type.lower().replace(" ", "_")
+                    base_name = f"stock_report_{safe_type}_{filename_date}"
+                    st.download_button(
+                        "Download Excel",
+                        data=dataframe_to_excel_bytes(report_df),
+                        file_name=f"{base_name}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                    )
+                    st.download_button(
+                        "Download CSV",
+                        data=report_df.to_csv(index=False).encode("utf-8-sig"),
+                        file_name=f"{base_name}.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                    )
+                    if st.button("Print Report", use_container_width=True):
+                        render_printable_stock_report(report_df, report_title)
+                    if st.button("Clear Stock Report", use_container_width=True):
+                        for key in [
+                            "stock_report_df",
+                            "stock_report_title",
+                            "stock_report_filename_date",
+                            "show_stock_report_preview",
+                            "stock_report_brand",
+                            "stock_report_category",
+                            "stock_report_item",
+                        ]:
+                            st.session_state.pop(key, None)
+                        st.rerun()
 
 # FF_5 >>> Sidebar Logout Section ------
 with st.sidebar:
@@ -1641,14 +1660,6 @@ with st.container(border=True):
     s3.metric("Profit (Sales - Pur)", mask_sensitive_v(total_profit))
 
     st.divider()
-
-
-if st.session_state.get("show_stock_report_preview", False):
-    stock_report_preview = st.session_state.get("stock_report_df", pd.DataFrame())
-    stock_report_title = st.session_state.get("stock_report_title", "Stock Report")
-    if not stock_report_preview.empty:
-        st.write(f"#### {stock_report_title}")
-        st.dataframe(stock_report_preview, use_container_width=True, hide_index=True)
 
 
 # HH_1 >>> New Transaction Area -----
@@ -2124,3 +2135,12 @@ if not df.empty:
 
 else:
     st.info("No transaction history found.")
+
+
+if has_permission("stock_reports") and st.session_state.get("show_stock_report_preview", False):
+    stock_report_preview = st.session_state.get("stock_report_df", pd.DataFrame())
+    stock_report_title = st.session_state.get("stock_report_title", "Stock Report")
+    if not stock_report_preview.empty:
+        st.markdown("---")
+        st.write(f"#### {stock_report_title}")
+        st.dataframe(stock_report_preview, use_container_width=True, hide_index=True)
