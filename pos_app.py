@@ -1963,6 +1963,8 @@ with clear_col:
 
 if st.session_state.get("cart"):
     cart_df = pd.DataFrame(st.session_state.cart)
+    pending_total_purchase = pd.to_numeric(cart_df.get("Total Purchase", 0), errors="coerce").fillna(0).sum()
+    pending_total_sale = pd.to_numeric(cart_df.get("Total Sale", 0), errors="coerce").fillna(0).sum()
     cart_display_cols = [
         col for col in [
             "Customer", "Customer Name", "Payment", "Brand", "Category", "Item",
@@ -1971,6 +1973,25 @@ if st.session_state.get("cart"):
         ] if col in cart_df.columns
     ]
     st.caption(f"Pending items: {len(cart_df)}")
+    pending_col1, pending_col2 = st.columns(2)
+    with pending_col1:
+        st.markdown(
+            f"""
+            <div style="border-left: 4px solid #0ea5e9; background: #f8fafc; padding: 10px 12px; border-radius: 8px; font-weight: 700;">
+                Pending Total Purchase: <span style="color:#0b84f3;">{pending_total_purchase:,.0f} THB</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with pending_col2:
+        st.markdown(
+            f"""
+            <div style="border-left: 4px solid #ff4b4b; background: #f8fafc; padding: 10px 12px; border-radius: 8px; font-weight: 700;">
+                Pending Total Sale: <span style="color:#ff4b4b;">{pending_total_sale:,.0f} THB</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     st.dataframe(
         cart_df[cart_display_cols].rename(columns={"Customer": "Customer Type"}),
         use_container_width=True,
