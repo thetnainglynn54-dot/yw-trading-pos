@@ -920,8 +920,7 @@ if st.session_state.reset_trigger:
     # á€žá€á€ºá€™á€¾á€á€ºá€‘á€¬á€¸á€žá€±á€¬ key á€™á€»á€¬á€¸á€€á€­á€¯ loop á€•á€á€ºá á€¡á€œá€½á€á€º (á€žá€­á€¯á€·á€™á€Ÿá€¯á€á€º) 0 á€•á€¼á€”á€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€á€¼á€„á€ºá€¸
     keys_to_reset = [
         "pq", "pp", "sq", "sp", "fi", "fe",
-        "c_name", "customer_name_manual", "discount_value", "tax_value", "remark_value",
-        "p_type_new"
+        "discount_value", "tax_value", "remark_value"
     ]
     for k in keys_to_reset:
         if k in st.session_state:
@@ -932,10 +931,7 @@ if st.session_state.reset_trigger:
     dropdown_keys = {
         "b_drop": "Choose Brand",
         "c_drop": "Choose Category",
-        "i_drop": "Choose Item",
-        "cust_drop": "Choose Customer",
-        "customer_name_drop": "Choose Customer",
-        "pay_drop": "Choose Payment"
+        "i_drop": "Choose Item"
     }
     for key, default_val in dropdown_keys.items():
         if key in st.session_state:
@@ -2051,6 +2047,10 @@ if not df.empty:
         h_df["Original_Index"] = h_df.index
     h_df = h_df.sort_values(by="Original_Index", ascending=False).reset_index(drop=True)
     display_df = h_df.copy()
+    if "Customer Name" in display_df.columns and "Customer" in display_df.columns:
+        first_cols = [col for col in ["Date", "Customer", "Customer Name", "Payment"] if col in display_df.columns]
+        remaining_cols = [col for col in display_df.columns if col not in first_cols]
+        display_df = display_df[first_cols + remaining_cols]
     display_df.insert(0, "Select", False)
     read_only_cols = [col for col in display_df.columns if col != "Select"]
 
@@ -2062,6 +2062,8 @@ if not df.empty:
         disabled=read_only_cols,
         column_config={
             "Select": st.column_config.CheckboxColumn("Select", default=False),
+            "Customer": st.column_config.TextColumn("Customer Type"),
+            "Customer Name": st.column_config.TextColumn("Customer Name"),
             "Original_Index": None # User á€€á€­á€¯ á€™á€•á€¼á€•á€«
         },
         key=t_key
