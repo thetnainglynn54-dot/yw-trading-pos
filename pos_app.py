@@ -917,15 +917,17 @@ if "reset_trigger" not in st.session_state:
     st.session_state.reset_trigger = False
 
 if st.session_state.reset_trigger:
-    # á€žá€á€ºá€™á€¾á€á€ºá€‘á€¬á€¸á€žá€±á€¬ key á€™á€»á€¬á€¸á€€á€­á€¯ loop á€•á€á€ºá á€¡á€œá€½á€á€º (á€žá€­á€¯á€·á€™á€Ÿá€¯á€á€º) 0 á€•á€¼á€”á€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€á€¼á€„á€ºá€¸
-    keys_to_reset = [
+    numeric_keys_to_reset = [
         "pq", "pp", "sq", "sp", "fi", "fe",
-        "discount_value", "tax_value", "remark_value"
+        "discount_value", "tax_value"
     ]
-    for k in keys_to_reset:
+    text_keys_to_reset = ["remark_value"]
+    for k in numeric_keys_to_reset:
         if k in st.session_state:
-            # á€…á€¬á€žá€¬á€¸á€–á€¼á€…á€ºá€•á€«á€€ á€¡á€œá€½á€á€ºáŠ á€‚á€á€”á€ºá€¸á€–á€¼á€…á€ºá€•á€«á€€ 0.0 á€‘á€¬á€¸á€™á€Šá€º
-            st.session_state[k] = "" if any(word in k for word in ["name", "type"]) else 0.0
+            st.session_state[k] = 0.0
+    for k in text_keys_to_reset:
+        if k in st.session_state:
+            st.session_state[k] = ""
             
     # Sidebar Dropdown á€™á€»á€¬á€¸á€€á€­á€¯ á€™á€°á€œá€¡á€á€­á€¯á€„á€ºá€¸ á€•á€¼á€”á€ºá€‘á€¬á€¸á€á€¼á€„á€ºá€¸
     dropdown_keys = {
@@ -1869,6 +1871,8 @@ with total_col1:
 with total_col2:
     st.text_input("Total Sale (THB)", value=f"{total_sale_value:,.2f}", disabled=True)
 with remark_col:
+    if not isinstance(st.session_state.get("remark_value", ""), str):
+        st.session_state["remark_value"] = ""
     remark_value = st.text_input("Remark", key="remark_value")
 
 
