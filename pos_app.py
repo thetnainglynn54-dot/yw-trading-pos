@@ -272,27 +272,6 @@ def unique_product_keys(frame):
     return keys
 
 
-def next_customer_name(frame, customer_type, trans_date):
-    if frame is None or frame.empty:
-        return "C1"
-    if "Customer Name" not in frame.columns:
-        return "C1"
-
-    names_df = frame.copy()
-    names_df["Date"] = pd.to_datetime(names_df["Date"], errors="coerce").dt.date
-    names_df = names_df[
-        (names_df["Date"] == trans_date)
-        & (names_df["Customer"].astype(str) == str(customer_type))
-    ]
-
-    max_num = 0
-    for value in names_df["Customer Name"].dropna().astype(str):
-        clean_value = value.strip().upper()
-        if clean_value.startswith("C") and clean_value[1:].isdigit():
-            max_num = max(max_num, int(clean_value[1:]))
-    return f"C{max_num + 1}"
-
-
 def recalculate_items_in_df(all_df, items):
     numeric_cols = ["Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Stock", "Balance"]
     for col in numeric_cols:
@@ -955,7 +934,7 @@ if st.session_state.reset_trigger:
         "c_drop": "Choose Category",
         "i_drop": "Choose Item",
         "cust_drop": "Choose Customer",
-        "customer_name_drop": "Auto New Customer",
+        "customer_name_drop": "Choose Customer",
         "pay_drop": "Choose Payment"
     }
     for key, default_val in dropdown_keys.items():
@@ -1736,8 +1715,7 @@ with customer_type_col:
 with customer_name_col:
     if cust_name and "Customer Name" in df.columns and not df.empty:
         customer_name_source = df[
-            (df["Date"] == tr_date)
-            & (df["Customer"].astype(str) == str(cust_name))
+            df["Customer"].astype(str) == str(cust_name)
         ]
         saved_customer_names = sorted([
             str(x) for x in customer_name_source["Customer Name"].dropna().unique()
@@ -1746,15 +1724,12 @@ with customer_name_col:
     else:
         saved_customer_names = []
 
-    name_options = ["Auto New Customer"] + saved_customer_names + ["Manual Name"]
+    name_options = ["Choose Customer"] + saved_customer_names + add_new_options
     customer_name_choice = st.selectbox("Customer Name", name_options, key="customer_name_drop")
-    if customer_name_choice == "Manual Name":
+    if customer_name_choice == "+ Add New":
         customer_display_name = st.text_input("New Customer Name", placeholder="Enter customer name...", key="customer_name_manual")
-    elif customer_name_choice == "Auto New Customer":
-        customer_display_name = next_customer_name(df, cust_name if cust_name else "-", tr_date)
-        st.caption(f"Auto: {customer_display_name}")
     else:
-        customer_display_name = customer_name_choice
+        customer_display_name = customer_name_choice if customer_name_choice != "Choose Customer" else ""
 
 with payment_col:
     pay_list = sorted([str(x) for x in df["Payment"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else ["Cash", "KPay", "Wave"]
@@ -1941,7 +1916,7 @@ if st.button("Save Transaction", use_container_width=True, type="primary"):
                     "Other Income": float(f_inc_val),
                     "Expense": float(f_exp_val),
                     "Created By": st.session_state.get("current_user", "Unknown"),
-                    "Customer Name": customer_display_name if customer_display_name else next_customer_name(df, cust_name if cust_name else "-", tr_date),
+                    "Customer Name": customer_display_name if customer_display_name else "-",
                     "Discount": float(discount_value),
                     "Tax": float(tax_value),
                     "Total Purchase": float(total_purchase_value),
