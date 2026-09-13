@@ -12,7 +12,8 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 EXPECTED_COLS = ["Date", "Customer", "Payment", "Brand", "Category", "Item",
                  "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Sale Price",
-                 "Stock", "Balance", "Other Income", "Expense", "Created By"]
+                 "Stock", "Balance", "Other Income", "Expense", "Created By",
+                 "Customer Name", "Discount", "Tax", "Total Purchase", "Total Sale", "Remark"]
 USERS_WORKSHEET = "users"
 USERS_COLS = ["username", "password_hash", "password_salt", "active", "permissions", "role"]
 
@@ -230,10 +231,27 @@ def get_worksheet():
     )
 
 
+def ensure_main_headers():
+    if st.session_state.get("main_headers_checked", False):
+        return
+    try:
+        worksheet = get_worksheet()
+        current_headers = worksheet.row_values(1)
+        if current_headers != EXPECTED_COLS:
+            worksheet.update(values=[EXPECTED_COLS], range_name="A1", value_input_option="USER_ENTERED")
+        st.session_state["main_headers_checked"] = True
+    except Exception:
+        st.session_state["main_headers_checked"] = True
+
+
 def as_sheet_value(value):
     if isinstance(value, (datetime, date)):
         return value.strftime("%Y-%m-%d")
     return value
+
+
+def number_value(value):
+    return float(pd.to_numeric(pd.Series([value]), errors="coerce").fillna(0).iloc[0])
 
 
 def product_key_from_row(row):
@@ -252,6 +270,27 @@ def unique_product_keys(frame):
         seen.add(key)
         keys.append(key)
     return keys
+
+
+def next_customer_name(frame, customer_type, trans_date):
+    if frame is None or frame.empty:
+        return "C1"
+    if "Customer Name" not in frame.columns:
+        return "C1"
+
+    names_df = frame.copy()
+    names_df["Date"] = pd.to_datetime(names_df["Date"], errors="coerce").dt.date
+    names_df = names_df[
+        (names_df["Date"] == trans_date)
+        & (names_df["Customer"].astype(str) == str(customer_type))
+    ]
+
+    max_num = 0
+    for value in names_df["Customer Name"].dropna().astype(str):
+        clean_value = value.strip().upper()
+        if clean_value.startswith("C") and clean_value[1:].isdigit():
+            max_num = max(max_num, int(clean_value[1:]))
+    return f"C{max_num + 1}"
 
 
 def recalculate_items_in_df(all_df, items):
@@ -890,6 +929,7 @@ if "show_values" not in st.session_state:
 # EE_1 >>> á€…á€á€„á€º Run á€á€¼á€„á€ºá€¸ (Cloud Version) -----
 # init_db() á€€á€­á€¯ á€¡á€•á€±á€«á€ºá€€ CC_1 á€™á€¾á€¬ pass á€œá€¯á€•á€ºá€‘á€¬á€¸á€á€²á€·á€á€²á€·á€¡á€á€½á€€á€º error á€™á€á€€á€ºá€˜á€² á€€á€»á€±á€¬á€ºá€žá€½á€¬á€¸á€•á€«á€œá€­á€™á€·á€ºá€™á€šá€º
 init_db()
+ensure_main_headers()
 
 df = load_data()
 
@@ -899,7 +939,11 @@ if "reset_trigger" not in st.session_state:
 
 if st.session_state.reset_trigger:
     # á€žá€á€ºá€™á€¾á€á€ºá€‘á€¬á€¸á€žá€±á€¬ key á€™á€»á€¬á€¸á€€á€­á€¯ loop á€•á€á€ºá á€¡á€œá€½á€á€º (á€žá€­á€¯á€·á€™á€Ÿá€¯á€á€º) 0 á€•á€¼á€”á€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€á€¼á€„á€ºá€¸
-    keys_to_reset = ["pq", "pp", "sq", "sp", "fi", "fe", "c_name", "p_type_new"]
+    keys_to_reset = [
+        "pq", "pp", "sq", "sp", "fi", "fe",
+        "c_name", "customer_name_manual", "discount_value", "tax_value", "remark_value",
+        "p_type_new"
+    ]
     for k in keys_to_reset:
         if k in st.session_state:
             # á€…á€¬á€žá€¬á€¸á€–á€¼á€…á€ºá€•á€«á€€ á€¡á€œá€½á€á€ºáŠ á€‚á€á€”á€ºá€¸á€–á€¼á€…á€ºá€•á€«á€€ 0.0 á€‘á€¬á€¸á€™á€Šá€º
@@ -911,6 +955,7 @@ if st.session_state.reset_trigger:
         "c_drop": "Choose Category",
         "i_drop": "Choose Item",
         "cust_drop": "Choose Customer",
+        "customer_name_drop": "Auto New Customer",
         "pay_drop": "Choose Payment"
     }
     for key, default_val in dropdown_keys.items():
@@ -1677,11 +1722,41 @@ with r1_c1:
     )
 
 with r1_c2:
-    cust_list = sorted([str(x) for x in df["Customer"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else []
-    c_sel = st.selectbox("Customer Name", ["Choose Customer"] + cust_list + add_new_options, key="cust_drop")
-    cust_name = st.text_input("New Customer Name", placeholder="Enter customer name...", key="c_name") if c_sel == "+ Add New" else (c_sel if c_sel != "Choose Customer" else "")
+    discount_value = st.number_input("Discount", min_value=0.0, step=1.0, key="discount_value")
 
 with r1_c3:
+    tax_value = st.number_input("Tax", min_value=0.0, step=1.0, key="tax_value")
+
+customer_type_col, customer_name_col, payment_col = st.columns(3)
+with customer_type_col:
+    cust_list = sorted([str(x) for x in df["Customer"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else []
+    c_sel = st.selectbox("Customer Type", ["Choose Customer"] + cust_list + add_new_options, key="cust_drop")
+    cust_name = st.text_input("New Customer Type", placeholder="Enter customer type...", key="c_name") if c_sel == "+ Add New" else (c_sel if c_sel != "Choose Customer" else "")
+
+with customer_name_col:
+    if cust_name and "Customer Name" in df.columns and not df.empty:
+        customer_name_source = df[
+            (df["Date"] == tr_date)
+            & (df["Customer"].astype(str) == str(cust_name))
+        ]
+        saved_customer_names = sorted([
+            str(x) for x in customer_name_source["Customer Name"].dropna().unique()
+            if str(x).strip() not in ["", "-", "nan", "None"]
+        ])
+    else:
+        saved_customer_names = []
+
+    name_options = ["Auto New Customer"] + saved_customer_names + ["Manual Name"]
+    customer_name_choice = st.selectbox("Customer Name", name_options, key="customer_name_drop")
+    if customer_name_choice == "Manual Name":
+        customer_display_name = st.text_input("New Customer Name", placeholder="Enter customer name...", key="customer_name_manual")
+    elif customer_name_choice == "Auto New Customer":
+        customer_display_name = next_customer_name(df, cust_name if cust_name else "-", tr_date)
+        st.caption(f"Auto: {customer_display_name}")
+    else:
+        customer_display_name = customer_name_choice
+
+with payment_col:
     pay_list = sorted([str(x) for x in df["Payment"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else ["Cash", "KPay", "Wave"]
     p_sel = st.selectbox("Payment Method", ["Choose Payment"] + pay_list + add_new_options, key="pay_drop")
     pay_type = st.text_input("New Payment Method", key="p_type_new") if p_sel == "+ Add New" else (p_sel if p_sel != "Choose Payment" else "Cash")
@@ -1814,6 +1889,17 @@ with col_o:
     f_inc_val = st.number_input("Other Income", min_value=0.0, step=1.0, key="fi")
     f_exp_val = st.number_input("Expense", min_value=0.0, step=1.0, key="fe")
 
+total_purchase_value = float(p_qty) * float(p_pr)
+total_sale_value = float(s_qty) * float(s_pr)
+
+total_col1, total_col2, remark_col = st.columns(3)
+with total_col1:
+    st.text_input("Total Purchase (THB)", value=f"{total_purchase_value:,.2f}", disabled=True)
+with total_col2:
+    st.text_input("Total Sale (THB)", value=f"{total_sale_value:,.2f}", disabled=True)
+with remark_col:
+    remark_value = st.text_input("Remark", key="remark_value")
+
 
 # JJ_1 >>> Saving Logic (Google Sheets Version) -----
 if st.button("Save Transaction", use_container_width=True, type="primary"):
@@ -1825,7 +1911,7 @@ if st.button("Save Transaction", use_container_width=True, type="primary"):
         st.stop()
 
     # á‚á‹ á€¡á€”á€¾á€¯á€á€ºá€‚á€á€”á€ºá€¸á€™á€»á€¬á€¸ á€™á€á€„á€ºá€¡á€±á€¬á€„á€º á€€á€¬á€€á€½á€šá€ºá€á€¼á€„á€ºá€¸
-    if p_qty < 0 or s_qty < 0 or f_inc_val < 0 or f_exp_val < 0:
+    if p_qty < 0 or s_qty < 0 or f_inc_val < 0 or f_exp_val < 0 or discount_value < 0 or tax_value < 0:
         st.error("❌ Quantity သို့မဟုတ် Amount များသည် အနုတ်ဂဏန်း (Negative) မဖြစ်ရပါ။")
         st.stop()
 
@@ -1854,7 +1940,13 @@ if st.button("Save Transaction", use_container_width=True, type="primary"):
                     "Balance": balance,
                     "Other Income": float(f_inc_val),
                     "Expense": float(f_exp_val),
-                    "Created By": st.session_state.get("current_user", "Unknown")
+                    "Created By": st.session_state.get("current_user", "Unknown"),
+                    "Customer Name": customer_display_name if customer_display_name else next_customer_name(df, cust_name if cust_name else "-", tr_date),
+                    "Discount": float(discount_value),
+                    "Tax": float(tax_value),
+                    "Total Purchase": float(total_purchase_value),
+                    "Total Sale": float(total_sale_value),
+                    "Remark": remark_value if remark_value else "",
                 }
 
                 worksheet = get_worksheet()
@@ -1883,12 +1975,19 @@ st.write("#### 📋 Transaction History")
 
 if not df.empty:
     # Filter á€™á€»á€¬á€¸á€€á€­á€¯ á€á€…á€ºá€á€”á€ºá€¸á€á€Šá€ºá€¸á€•á€¼á€á€¼á€„á€ºá€¸
-    f1, f2, f3, f4, f5 = st.columns(5)
-    with f1: sel_cus = st.selectbox("Filter by Customer", ["All"] + sorted(df["Customer"].dropna().unique().tolist()), key="f_cus")
-    with f2: sel_pay = st.selectbox("Filter by Payment", ["All"] + sorted(df["Payment"].dropna().unique().tolist()), key="f_pay")
-    with f3: sel_brand = st.selectbox("Filter by Brand", ["All"] + sorted(df["Brand"].dropna().unique().tolist()), key="f_brand")
-    with f4: sel_cat = st.selectbox("Filter by Category", ["All"] + sorted(df["Category"].dropna().unique().tolist()), key="f_cat")
-    with f5: sel_item = st.selectbox("Filter by Item", ["All"] + sorted(df["Item"].dropna().unique().tolist()), key="f_item")
+    f1, f2, f3, f4, f5, f6 = st.columns(6)
+    with f1: sel_cus = st.selectbox("Filter by Customer Type", ["All"] + sorted(df["Customer"].dropna().unique().tolist()), key="f_cus")
+    customer_name_options = ["All"]
+    if "Customer Name" in df.columns:
+        customer_name_options += sorted([
+            str(x) for x in df["Customer Name"].dropna().unique().tolist()
+            if str(x).strip() not in ["", "-", "nan", "None"]
+        ])
+    with f2: sel_customer_name = st.selectbox("Filter by Customer Name", customer_name_options, key="f_customer_name")
+    with f3: sel_pay = st.selectbox("Filter by Payment", ["All"] + sorted(df["Payment"].dropna().unique().tolist()), key="f_pay")
+    with f4: sel_brand = st.selectbox("Filter by Brand", ["All"] + sorted(df["Brand"].dropna().unique().tolist()), key="f_brand")
+    with f5: sel_cat = st.selectbox("Filter by Category", ["All"] + sorted(df["Category"].dropna().unique().tolist()), key="f_cat")
+    with f6: sel_item = st.selectbox("Filter by Item", ["All"] + sorted(df["Item"].dropna().unique().tolist()), key="f_item")
 
     # Date Range á€”á€¾á€„á€·á€º á€á€œá€¯á€á€ºá€™á€»á€¬á€¸
     with st.container(border=True):
@@ -1914,6 +2013,8 @@ if not df.empty:
     h_df = h_df.loc[mask]
 
     if sel_cus != "All": h_df = h_df[h_df["Customer"] == sel_cus]
+    if sel_customer_name != "All" and "Customer Name" in h_df.columns:
+        h_df = h_df[h_df["Customer Name"].astype(str) == str(sel_customer_name)]
     if sel_pay != "All": h_df = h_df[h_df["Payment"] == sel_pay]
     if sel_brand != "All": h_df = h_df[h_df["Brand"] == sel_brand]
     if sel_cat != "All": h_df = h_df[h_df["Category"] == sel_cat]
@@ -1945,6 +2046,29 @@ if not df.empty:
             """,
             unsafe_allow_html=True
         )
+
+    if "Customer Name" in summary_df.columns:
+        sales_only_df = summary_df[pd.to_numeric(summary_df["Sale Qty"], errors="coerce").fillna(0) > 0].copy()
+        if not sales_only_df.empty:
+            sales_only_df["Customer Name"] = sales_only_df["Customer Name"].replace("", pd.NA).fillna(sales_only_df["Customer"])
+            sales_only_df["Line Amount"] = sales_only_df["Sale Qty"] * sales_only_df["Sale Price"]
+            customer_summary = (
+                sales_only_df
+                .groupby(["Customer", "Customer Name"], dropna=False)
+                .agg(
+                    Items=("Item", lambda items: ", ".join([str(x) for x in items if str(x) not in ["", "-", "nan"]])),
+                    Sale_Qty=("Sale Qty", "sum"),
+                    Sale_Amount=("Line Amount", "sum"),
+                )
+                .reset_index()
+                .rename(columns={
+                    "Customer": "Customer Type",
+                    "Sale_Qty": "Sale Qty",
+                    "Sale_Amount": "Sale Amount",
+                })
+            )
+            st.caption(f"Customer count: {customer_summary['Customer Name'].nunique()}")
+            st.dataframe(customer_summary, use_container_width=True, hide_index=True)
 
     # Data Editor (á€›á€½á€±á€¸á€á€»á€šá€ºá€”á€­á€¯á€„á€ºá€žá€±á€¬ á€‡á€šá€¬á€¸)
     # Original_Index á€žá€Šá€º Google Sheet á€‘á€²á€›á€¾á€­ row order á€€á€­á€¯ á€‘á€­á€”á€ºá€¸á€‘á€¬á€¸á€žá€Šá€ºá‹
@@ -1979,11 +2103,15 @@ if not df.empty:
 
         current_date = pd.to_datetime(row_data["Date"]).date()
         current_customer = str(row_data.get("Customer", "-"))
+        current_customer_name = str(row_data.get("Customer Name", ""))
         current_payment = str(row_data.get("Payment", "Cash"))
         current_pq = float(row_data.get("Purchase Qty", 0) or 0)
         current_pp = float(row_data.get("Pur Price", 0) or 0)
         current_sq = float(row_data.get("Sale Qty", 0) or 0)
         current_sp = float(row_data.get("Sale Price", 0) or 0)
+        current_discount = number_value(row_data.get("Discount", 0))
+        current_tax = number_value(row_data.get("Tax", 0))
+        current_remark = str(row_data.get("Remark", ""))
 
         customer_list = sorted([str(x) for x in df["Customer"].dropna().unique().tolist()])
         payment_list = sorted([str(x) for x in df["Payment"].dropna().unique().tolist()])
@@ -1992,17 +2120,23 @@ if not df.empty:
         if current_payment not in payment_list:
             payment_list.insert(0, current_payment)
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             new_date = st.date_input("Date", value=current_date, key=f"edit_date_{target_idx}")
         with col2:
             new_customer = st.selectbox(
-                "Customer",
+                "Customer Type",
                 options=customer_list,
                 index=customer_list.index(current_customer) if current_customer in customer_list else 0,
                 key=f"edit_customer_{target_idx}"
             )
         with col3:
+            new_customer_name = st.text_input(
+                "Customer Name",
+                value=current_customer_name,
+                key=f"edit_customer_name_{target_idx}",
+            )
+        with col4:
             new_payment = st.selectbox(
                 "Payment",
                 options=payment_list,
@@ -2053,17 +2187,32 @@ if not df.empty:
             )
 
         st.markdown("---")
+        ex1, ex2, ex3 = st.columns(3)
+        with ex1:
+            new_discount = st.number_input("Discount", min_value=0.0, value=current_discount, step=1.0, key=f"edit_discount_{target_idx}")
+        with ex2:
+            new_tax = st.number_input("Tax", min_value=0.0, value=current_tax, step=1.0, key=f"edit_tax_{target_idx}")
+        with ex3:
+            new_remark = st.text_input("Remark", value=current_remark, key=f"edit_remark_{target_idx}")
+
+        st.markdown("---")
         if st.button("Confirm Update", type="primary", use_container_width=True, key=f"confirm_update_{target_idx}"):
             try:
                 all_df = conn.read(ttl=60)
 
                 all_df.loc[target_idx, "Date"] = as_sheet_value(new_date)
                 all_df.loc[target_idx, "Customer"] = new_customer
+                all_df.loc[target_idx, "Customer Name"] = new_customer_name if new_customer_name else current_customer_name
                 all_df.loc[target_idx, "Payment"] = new_payment
                 all_df.loc[target_idx, "Purchase Qty"] = float(new_p_qty)
                 all_df.loc[target_idx, "Pur Price"] = float(new_p_price)
                 all_df.loc[target_idx, "Sale Qty"] = float(new_s_qty)
                 all_df.loc[target_idx, "Sale Price"] = float(new_s_price)
+                all_df.loc[target_idx, "Discount"] = float(new_discount)
+                all_df.loc[target_idx, "Tax"] = float(new_tax)
+                all_df.loc[target_idx, "Total Purchase"] = float(new_p_qty) * float(new_p_price)
+                all_df.loc[target_idx, "Total Sale"] = float(new_s_qty) * float(new_s_price)
+                all_df.loc[target_idx, "Remark"] = new_remark
 
                 all_df = recalculate_items_in_df(all_df, [target_product_key])
                 conn.update(data=all_df)
@@ -2122,16 +2271,25 @@ if not df.empty:
             st.stop()
         # á€žá€„á€ºá á€™á€°á€›á€„á€ºá€¸ Print Logic á€¡á€á€­á€¯á€„á€ºá€¸ á€†á€€á€ºá€œá€€á€ºá€¡á€žá€¯á€¶á€¸á€•á€¼á€¯á€”á€­á€¯á€„á€ºá€•á€«á€žá€Šá€º
         selected_rows = edited_df[edited_df["Select"] == True]
+        if selected_rows.empty and sel_customer_name != "All" and "Customer Name" in h_df.columns:
+            selected_rows = h_df[h_df["Customer Name"].astype(str) == str(sel_customer_name)].copy()
         if not selected_rows.empty:
-            cust_name = str(selected_rows.iloc[0]['Customer'])
+            if "Customer Name" in selected_rows.columns and str(selected_rows.iloc[0].get("Customer Name", "")).strip():
+                cust_name = str(selected_rows.iloc[0]["Customer Name"])
+            else:
+                cust_name = str(selected_rows.iloc[0]['Customer'])
             items_to_print = []
             grand_total = 0
             for _, row in selected_rows.iterrows():
-                if row['Sale Qty'] > 0:
-                    amount = row['Sale Qty'] * row['Sale Price']
-                    items_to_print.append({"name": f"{row['Brand']} {row['Item']}", "qty": row['Sale Qty'], "price": row['Sale Price'], "amount": amount})
+                row_sale_qty = number_value(row.get("Sale Qty", 0))
+                row_sale_price = number_value(row.get("Sale Price", 0))
+                if row_sale_qty > 0:
+                    amount = row_sale_qty * row_sale_price
+                    items_to_print.append({"name": f"{row['Brand']} {row['Item']}", "qty": row_sale_qty, "price": row_sale_price, "amount": amount})
                     grand_total += amount
             show_receipt_ui(cust_name, items_to_print, grand_total)
+        else:
+            st.warning("Select rows or choose a Customer Name filter to print.")
 
 else:
     st.info("No transaction history found.")
