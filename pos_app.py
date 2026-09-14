@@ -12,8 +12,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 EXPECTED_COLS = ["Date", "Customer", "Payment", "Brand", "Category", "Item",
                  "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Sale Price",
-                 "Stock", "Balance", "Other Income", "Expense", "Created By",
-                 "Customer Name", "Discount", "Tax", "Total Purchase", "Total Sale", "Remark"]
+                 "Stock", "Balance", "Other Income", "Expense", "Created By"]
 USERS_WORKSHEET = "users"
 USERS_COLS = ["username", "password_hash", "password_salt", "active", "permissions", "role"]
 
@@ -231,37 +230,10 @@ def get_worksheet():
     )
 
 
-def ensure_main_headers():
-    if st.session_state.get("main_headers_checked", False):
-        return
-    try:
-        worksheet = get_worksheet()
-        current_headers = worksheet.row_values(1)
-        if current_headers != EXPECTED_COLS:
-            worksheet.update(values=[EXPECTED_COLS], range_name="A1", value_input_option="USER_ENTERED")
-        st.session_state["main_headers_checked"] = True
-    except Exception:
-        st.session_state["main_headers_checked"] = True
-
-
 def as_sheet_value(value):
     if isinstance(value, (datetime, date)):
         return value.strftime("%Y-%m-%d")
     return value
-
-
-def number_value(value):
-    return float(pd.to_numeric(pd.Series([value]), errors="coerce").fillna(0).iloc[0])
-
-
-def append_inventory_rows(rows):
-    worksheet = get_worksheet()
-    values = [[as_sheet_value(row[col]) for col in EXPECTED_COLS] for row in rows]
-    if hasattr(worksheet, "append_rows"):
-        worksheet.append_rows(values, value_input_option="USER_ENTERED")
-    else:
-        for value_row in values:
-            worksheet.append_row(value_row, value_input_option="USER_ENTERED")
 
 
 def product_key_from_row(row):
@@ -918,7 +890,6 @@ if "show_values" not in st.session_state:
 # EE_1 >>> á€…á€á€„á€º Run á€á€¼á€„á€ºá€¸ (Cloud Version) -----
 # init_db() á€€á€­á€¯ á€¡á€•á€±á€«á€ºá€€ CC_1 á€™á€¾á€¬ pass á€œá€¯á€•á€ºá€‘á€¬á€¸á€á€²á€·á€á€²á€·á€¡á€á€½á€€á€º error á€™á€á€€á€ºá€˜á€² á€€á€»á€±á€¬á€ºá€žá€½á€¬á€¸á€•á€«á€œá€­á€™á€·á€ºá€™á€šá€º
 init_db()
-ensure_main_headers()
 
 df = load_data()
 
@@ -927,23 +898,20 @@ if "reset_trigger" not in st.session_state:
     st.session_state.reset_trigger = False
 
 if st.session_state.reset_trigger:
-    numeric_keys_to_reset = [
-        "pq", "pp", "sq", "sp", "fi", "fe",
-        "discount_value", "tax_value"
-    ]
-    text_keys_to_reset = ["remark_value"]
-    for k in numeric_keys_to_reset:
+    # á€žá€á€ºá€™á€¾á€á€ºá€‘á€¬á€¸á€žá€±á€¬ key á€™á€»á€¬á€¸á€€á€­á€¯ loop á€•á€á€ºá á€¡á€œá€½á€á€º (á€žá€­á€¯á€·á€™á€Ÿá€¯á€á€º) 0 á€•á€¼á€”á€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€á€¼á€„á€ºá€¸
+    keys_to_reset = ["pq", "pp", "sq", "sp", "fi", "fe", "c_name", "p_type_new"]
+    for k in keys_to_reset:
         if k in st.session_state:
-            st.session_state[k] = 0.0
-    for k in text_keys_to_reset:
-        if k in st.session_state:
-            st.session_state[k] = ""
+            # á€…á€¬á€žá€¬á€¸á€–á€¼á€…á€ºá€•á€«á€€ á€¡á€œá€½á€á€ºáŠ á€‚á€á€”á€ºá€¸á€–á€¼á€…á€ºá€•á€«á€€ 0.0 á€‘á€¬á€¸á€™á€Šá€º
+            st.session_state[k] = "" if any(word in k for word in ["name", "type"]) else 0.0
             
     # Sidebar Dropdown á€™á€»á€¬á€¸á€€á€­á€¯ á€™á€°á€œá€¡á€á€­á€¯á€„á€ºá€¸ á€•á€¼á€”á€ºá€‘á€¬á€¸á€á€¼á€„á€ºá€¸
     dropdown_keys = {
         "b_drop": "Choose Brand",
         "c_drop": "Choose Category",
-        "i_drop": "Choose Item"
+        "i_drop": "Choose Item",
+        "cust_drop": "Choose Customer",
+        "pay_drop": "Choose Payment"
     }
     for key, default_val in dropdown_keys.items():
         if key in st.session_state:
@@ -1697,12 +1665,9 @@ with st.container(border=True):
 # HH_1 >>> New Transaction Area -----
 st.markdown('<div id="new-transaction" class="mobile-page-anchor mobile-section-marker" data-section="new"></div>', unsafe_allow_html=True)
 st.write("#### ➕ New Transaction")
-add_new_options = ["+ Add New"] if has_permission("add_new_names") else []
-discount_value = 0.0
-tax_value = 0.0
-customer_display_name = "-"
-
 r1_c1, r1_c2, r1_c3 = st.columns([1, 1, 1])
+add_new_options = ["+ Add New"] if has_permission("add_new_names") else []
+
 with r1_c1:
     tr_date = st.date_input(
         "Date",
@@ -1713,8 +1678,8 @@ with r1_c1:
 
 with r1_c2:
     cust_list = sorted([str(x) for x in df["Customer"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else []
-    c_sel = st.selectbox("Customer", ["Choose Customer"] + cust_list + add_new_options, key="cust_drop")
-    cust_name = st.text_input("New Customer", placeholder="Enter customer...", key="c_name") if c_sel == "+ Add New" else (c_sel if c_sel != "Choose Customer" else "")
+    c_sel = st.selectbox("Customer Name", ["Choose Customer"] + cust_list + add_new_options, key="cust_drop")
+    cust_name = st.text_input("New Customer Name", placeholder="Enter customer name...", key="c_name") if c_sel == "+ Add New" else (c_sel if c_sel != "Choose Customer" else "")
 
 with r1_c3:
     pay_list = sorted([str(x) for x in df["Payment"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else ["Cash", "KPay", "Wave"]
@@ -1849,156 +1814,66 @@ with col_o:
     f_inc_val = st.number_input("Other Income", min_value=0.0, step=1.0, key="fi")
     f_exp_val = st.number_input("Expense", min_value=0.0, step=1.0, key="fe")
 
-total_purchase_value = float(p_qty) * float(p_pr)
-total_sale_value = float(s_qty) * float(s_pr)
-
-total_col1, total_col2, remark_col = st.columns(3)
-with total_col1:
-    st.text_input("Total Purchase (THB)", value=f"{total_purchase_value:,.2f}", disabled=True)
-with total_col2:
-    st.text_input("Total Sale (THB)", value=f"{total_sale_value:,.2f}", disabled=True)
-with remark_col:
-    if not isinstance(st.session_state.get("remark_value", ""), str):
-        st.session_state["remark_value"] = ""
-    remark_value = st.text_input("Remark", key="remark_value")
-
-
-def current_cart_stock_adjustment(product_key):
-    adjustment = 0.0
-    for cart_row in st.session_state.get("cart", []):
-        if product_key_from_row(cart_row) == product_key:
-            adjustment += float(cart_row.get("Purchase Qty", 0) or 0)
-            adjustment -= float(cart_row.get("Sale Qty", 0) or 0)
-    return adjustment
-
-
-def build_transaction_row(before_amt):
-    after_stock = max((float(before_amt) + float(p_qty)) - float(s_qty), 0.0)
-    balance = after_stock * float(p_pr) if float(p_pr) > 0 else 0.0
-    return {
-        "Date": tr_date,
-        "Customer": cust_name if cust_name else "-",
-        "Payment": pay_type if pay_type else "Cash",
-        "Brand": f_brand if f_brand else "-",
-        "Category": f_cat if f_cat else "-",
-        "Item": f_item if f_item else "-",
-        "Before Amt": float(before_amt),
-        "Purchase Qty": float(p_qty),
-        "Pur Price": float(p_pr),
-        "Sale Qty": float(s_qty),
-        "Sale Price": float(s_pr),
-        "Stock": after_stock,
-        "Balance": balance,
-        "Other Income": float(f_inc_val),
-        "Expense": float(f_exp_val),
-        "Created By": st.session_state.get("current_user", "Unknown"),
-        "Customer Name": customer_display_name if customer_display_name else "-",
-        "Discount": float(discount_value),
-        "Tax": float(tax_value),
-        "Total Purchase": float(total_purchase_value),
-        "Total Sale": float(total_sale_value),
-        "Remark": remark_value if remark_value else "",
-    }
-
-
-def validate_current_transaction_line():
-    if p_qty < 0 or s_qty < 0 or f_inc_val < 0 or f_exp_val < 0 or discount_value < 0 or tax_value < 0:
-        st.error("❌ Quantity သို့မဟုတ် Amount များသည် အနုတ်ဂဏန်း (Negative) မဖြစ်ရပါ။")
-        return False
-
-    if not (f_item or f_inc_val > 0 or f_exp_val > 0):
-        st.warning("⚠️ သိမ်းဆည်းရန် အချက်အလက်များ ပြည့်စုံစွာ ဖြည့်စွက်ပေးပါ။")
-        return False
-
-    if s_qty > 0:
-        product_key = (str(f_brand), str(f_cat), str(f_item))
-        available_stock = float(l_stock) + current_cart_stock_adjustment(product_key)
-        if available_stock < s_qty:
-            st.error(f"❌ လက်ကျန် Stock ({available_stock:,.0f}) ထက် ပိုရောင်း၍ မရပါ။")
-            return False
-
-    return True
-
-
-add_col, clear_col = st.columns([2, 1])
-with add_col:
-    if st.button("Add Item to List", use_container_width=True):
-        if not require_permission("new_transaction"):
-            st.stop()
-        if validate_current_transaction_line():
-            product_key = (str(f_brand), str(f_cat), str(f_item))
-            before_amt = float(l_stock) + current_cart_stock_adjustment(product_key) if f_item and f_item != "-" else 0.0
-            st.session_state.cart.append(build_transaction_row(before_amt))
-            st.session_state.reset_trigger = True
-            st.success("✅ Item ကို save မလုပ်သေးဘဲ pending list ထဲထည့်ပြီးပါပြီ။")
-            st.rerun()
-
-with clear_col:
-    if st.session_state.get("cart") and st.button("Clear List", use_container_width=True):
-        st.session_state.cart = []
-        st.rerun()
-
-if st.session_state.get("cart"):
-    cart_df = pd.DataFrame(st.session_state.cart)
-    pending_total_purchase = pd.to_numeric(cart_df.get("Total Purchase", 0), errors="coerce").fillna(0).sum()
-    pending_total_sale = pd.to_numeric(cart_df.get("Total Sale", 0), errors="coerce").fillna(0).sum()
-    cart_display_cols = [
-        col for col in [
-            "Customer", "Payment", "Brand", "Category", "Item",
-            "Purchase Qty", "Pur Price", "Sale Qty", "Sale Price",
-            "Total Purchase", "Total Sale", "Remark"
-        ] if col in cart_df.columns
-    ]
-    st.caption(f"Pending items: {len(cart_df)}")
-    pending_col1, pending_col2 = st.columns(2)
-    with pending_col1:
-        st.markdown(
-            f"""
-            <div style="border-left: 4px solid #0ea5e9; background: #f8fafc; padding: 10px 12px; border-radius: 8px; font-weight: 700;">
-                Pending Total Purchase: <span style="color:#0b84f3;">{pending_total_purchase:,.0f} THB</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with pending_col2:
-        st.markdown(
-            f"""
-            <div style="border-left: 4px solid #ff4b4b; background: #f8fafc; padding: 10px 12px; border-radius: 8px; font-weight: 700;">
-                Pending Total Sale: <span style="color:#ff4b4b;">{pending_total_sale:,.0f} THB</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    st.dataframe(
-        cart_df[cart_display_cols],
-        use_container_width=True,
-        hide_index=True,
-    )
-
 
 # JJ_1 >>> Saving Logic (Google Sheets Version) -----
 if st.button("Save Transaction", use_container_width=True, type="primary"):
     if not require_permission("new_transaction"):
         st.stop()
-    rows_to_save = list(st.session_state.get("cart", []))
-    if not rows_to_save:
-        if not validate_current_transaction_line():
-            st.stop()
-        rows_to_save = [build_transaction_row(float(l_stock) if f_item and f_item != "-" else 0.0)]
+    # áá‹ á€¡á€›á€±á€¬á€„á€ºá€¸á€žá€½á€„á€ºá€¸á€œá€»á€¾á€„á€º Stock á€›á€¾á€­á€™á€›á€¾á€­ á€¡á€›á€„á€ºá€…á€…á€ºá€™á€Šá€º
+    if s_qty > 0 and l_stock < s_qty:
+        st.error(f"❌ လက်ကျန် Stock ({l_stock:,.0f}) ထက် ပိုရောင်း၍ မရပါ။")
+        st.stop()
 
-    if rows_to_save:
+    # á‚á‹ á€¡á€”á€¾á€¯á€á€ºá€‚á€á€”á€ºá€¸á€™á€»á€¬á€¸ á€™á€á€„á€ºá€¡á€±á€¬á€„á€º á€€á€¬á€€á€½á€šá€ºá€á€¼á€„á€ºá€¸
+    if p_qty < 0 or s_qty < 0 or f_inc_val < 0 or f_exp_val < 0:
+        st.error("❌ Quantity သို့မဟုတ် Amount များသည် အနုတ်ဂဏန်း (Negative) မဖြစ်ရပါ။")
+        st.stop()
+
+    # áƒá‹ á€¡á€”á€Šá€ºá€¸á€†á€¯á€¶á€¸ á€¡á€á€»á€€á€ºá€¡á€œá€€á€º á€á€…á€ºá€á€¯á€á€¯ á€•á€«á€á€„á€ºá€™á€¾ á€žá€­á€™á€ºá€¸á€™á€Šá€º
+    elif (f_item or f_inc_val > 0 or f_exp_val > 0):
         try:
             with st.spinner("☁️ Cloud ပေါ်သို့ သိမ်းဆည်းနေပါသည်..."):
-                append_inventory_rows(rows_to_save)
+                before_amt = float(l_stock) if f_item and f_item != "-" else 0.0
+                after_stock = max((before_amt + float(p_qty)) - float(s_qty), 0.0)
+                balance = after_stock * float(p_pr) if float(p_pr) > 0 else 0.0
+
+                # á€žá€­á€™á€ºá€¸á€†á€Šá€ºá€¸á€™á€Šá€·á€º Row á€á€”á€ºá€–á€­á€¯á€¸á€™á€»á€¬á€¸ (Column áá… á€á€¯)
+                row_data = {
+                    "Date": tr_date, # load_data á€”á€¾á€„á€·á€º á€Šá€®á€…á€±á€›á€”á€º Date object á€¡á€á€­á€¯á€„á€ºá€¸ á€‘á€¬á€¸á€•á€«
+                    "Customer": cust_name if cust_name else "-",
+                    "Payment": pay_type if pay_type else "Cash",
+                    "Brand": f_brand if f_brand else "-",
+                    "Category": f_cat if f_cat else "-",
+                    "Item": f_item if f_item else "-",
+                    "Before Amt": before_amt,
+                    "Purchase Qty": float(p_qty),
+                    "Pur Price": float(p_pr),
+                    "Sale Qty": float(s_qty),
+                    "Sale Price": float(s_pr),
+                    "Stock": after_stock,
+                    "Balance": balance,
+                    "Other Income": float(f_inc_val),
+                    "Expense": float(f_exp_val),
+                    "Created By": st.session_state.get("current_user", "Unknown")
+                }
+
+                worksheet = get_worksheet()
+                worksheet.append_row(
+                    [as_sheet_value(row_data[col]) for col in EXPECTED_COLS],
+                    value_input_option="USER_ENTERED"
+                )
                 clear_data_cache()
 
-                st.session_state.cart = []
+                # á…á‹ á€•á€¼á€®á€¸á€†á€¯á€¶á€¸á€€á€¼á€±á€¬á€„á€ºá€¸ á€¡á€žá€­á€•á€±á€¸á€•á€¼á€®á€¸ UI Reset á€œá€¯á€•á€ºá€™á€Šá€º
                 st.session_state.reset_trigger = True
-                st.success(f"✅ စာရင်း {len(rows_to_save)} ခုကို Cloud ပေါ်သို့ သိမ်းဆည်းပြီးပါပြီ!")
+                st.success("✅ စာရင်းကို Cloud ပေါ်သို့ သိမ်းဆည်းပြီး Stock ပြန်လည်တွက်ချက်ပြီးပါပြီ!")
                 st.rerun()
 
         except Exception as e:
             st.error(f"❌ Google Sheets Error: {e}")
+        
+    else:
+        st.warning("⚠️ သိမ်းဆည်းရန် အချက်အလက်များ ပြည့်စုံစွာ ဖြည့်စွက်ပေးပါ။")
 
 
 
@@ -2010,7 +1885,6 @@ if not df.empty:
     # Filter á€™á€»á€¬á€¸á€€á€­á€¯ á€á€…á€ºá€á€”á€ºá€¸á€á€Šá€ºá€¸á€•á€¼á€á€¼á€„á€ºá€¸
     f1, f2, f3, f4, f5 = st.columns(5)
     with f1: sel_cus = st.selectbox("Filter by Customer", ["All"] + sorted(df["Customer"].dropna().unique().tolist()), key="f_cus")
-    sel_customer_name = "All"
     with f2: sel_pay = st.selectbox("Filter by Payment", ["All"] + sorted(df["Payment"].dropna().unique().tolist()), key="f_pay")
     with f3: sel_brand = st.selectbox("Filter by Brand", ["All"] + sorted(df["Brand"].dropna().unique().tolist()), key="f_brand")
     with f4: sel_cat = st.selectbox("Filter by Category", ["All"] + sorted(df["Category"].dropna().unique().tolist()), key="f_cat")
@@ -2040,8 +1914,6 @@ if not df.empty:
     h_df = h_df.loc[mask]
 
     if sel_cus != "All": h_df = h_df[h_df["Customer"] == sel_cus]
-    if sel_customer_name != "All" and "Customer Name" in h_df.columns:
-        h_df = h_df[h_df["Customer Name"].astype(str) == str(sel_customer_name)]
     if sel_pay != "All": h_df = h_df[h_df["Payment"] == sel_pay]
     if sel_brand != "All": h_df = h_df[h_df["Brand"] == sel_brand]
     if sel_cat != "All": h_df = h_df[h_df["Category"] == sel_cat]
@@ -2080,11 +1952,6 @@ if not df.empty:
         h_df["Original_Index"] = h_df.index
     h_df = h_df.sort_values(by="Original_Index", ascending=False).reset_index(drop=True)
     display_df = h_df.copy()
-    display_df = display_df.drop(columns=["Customer Name", "Discount", "Tax"], errors="ignore")
-    if "Customer" in display_df.columns:
-        first_cols = [col for col in ["Date", "Customer", "Payment"] if col in display_df.columns]
-        remaining_cols = [col for col in display_df.columns if col not in first_cols]
-        display_df = display_df[first_cols + remaining_cols]
     display_df.insert(0, "Select", False)
     read_only_cols = [col for col in display_df.columns if col != "Select"]
 
@@ -2096,7 +1963,6 @@ if not df.empty:
         disabled=read_only_cols,
         column_config={
             "Select": st.column_config.CheckboxColumn("Select", default=False),
-            "Customer": st.column_config.TextColumn("Customer"),
             "Original_Index": None # User á€€á€­á€¯ á€™á€•á€¼á€•á€«
         },
         key=t_key
@@ -2113,15 +1979,11 @@ if not df.empty:
 
         current_date = pd.to_datetime(row_data["Date"]).date()
         current_customer = str(row_data.get("Customer", "-"))
-        current_customer_name = str(row_data.get("Customer Name", ""))
         current_payment = str(row_data.get("Payment", "Cash"))
         current_pq = float(row_data.get("Purchase Qty", 0) or 0)
         current_pp = float(row_data.get("Pur Price", 0) or 0)
         current_sq = float(row_data.get("Sale Qty", 0) or 0)
         current_sp = float(row_data.get("Sale Price", 0) or 0)
-        current_discount = number_value(row_data.get("Discount", 0))
-        current_tax = number_value(row_data.get("Tax", 0))
-        current_remark = str(row_data.get("Remark", ""))
 
         customer_list = sorted([str(x) for x in df["Customer"].dropna().unique().tolist()])
         payment_list = sorted([str(x) for x in df["Payment"].dropna().unique().tolist()])
@@ -2147,7 +2009,6 @@ if not df.empty:
                 index=payment_list.index(current_payment) if current_payment in payment_list else 0,
                 key=f"edit_payment_{target_idx}"
             )
-        new_customer_name = current_customer_name
 
         st.markdown("### Item Info")
         i1, i2, i3 = st.columns(3)
@@ -2192,28 +2053,17 @@ if not df.empty:
             )
 
         st.markdown("---")
-        new_discount = current_discount
-        new_tax = current_tax
-        new_remark = st.text_input("Remark", value=current_remark, key=f"edit_remark_{target_idx}")
-
-        st.markdown("---")
         if st.button("Confirm Update", type="primary", use_container_width=True, key=f"confirm_update_{target_idx}"):
             try:
                 all_df = conn.read(ttl=60)
 
                 all_df.loc[target_idx, "Date"] = as_sheet_value(new_date)
                 all_df.loc[target_idx, "Customer"] = new_customer
-                all_df.loc[target_idx, "Customer Name"] = new_customer_name if new_customer_name else current_customer_name
                 all_df.loc[target_idx, "Payment"] = new_payment
                 all_df.loc[target_idx, "Purchase Qty"] = float(new_p_qty)
                 all_df.loc[target_idx, "Pur Price"] = float(new_p_price)
                 all_df.loc[target_idx, "Sale Qty"] = float(new_s_qty)
                 all_df.loc[target_idx, "Sale Price"] = float(new_s_price)
-                all_df.loc[target_idx, "Discount"] = float(new_discount)
-                all_df.loc[target_idx, "Tax"] = float(new_tax)
-                all_df.loc[target_idx, "Total Purchase"] = float(new_p_qty) * float(new_p_price)
-                all_df.loc[target_idx, "Total Sale"] = float(new_s_qty) * float(new_s_price)
-                all_df.loc[target_idx, "Remark"] = new_remark
 
                 all_df = recalculate_items_in_df(all_df, [target_product_key])
                 conn.update(data=all_df)
@@ -2272,25 +2122,16 @@ if not df.empty:
             st.stop()
         # á€žá€„á€ºá á€™á€°á€›á€„á€ºá€¸ Print Logic á€¡á€á€­á€¯á€„á€ºá€¸ á€†á€€á€ºá€œá€€á€ºá€¡á€žá€¯á€¶á€¸á€•á€¼á€¯á€”á€­á€¯á€„á€ºá€•á€«á€žá€Šá€º
         selected_rows = edited_df[edited_df["Select"] == True]
-        if selected_rows.empty and sel_customer_name != "All" and "Customer Name" in h_df.columns:
-            selected_rows = h_df[h_df["Customer Name"].astype(str) == str(sel_customer_name)].copy()
         if not selected_rows.empty:
-            if "Customer Name" in selected_rows.columns and str(selected_rows.iloc[0].get("Customer Name", "")).strip():
-                cust_name = str(selected_rows.iloc[0]["Customer Name"])
-            else:
-                cust_name = str(selected_rows.iloc[0]['Customer'])
+            cust_name = str(selected_rows.iloc[0]['Customer'])
             items_to_print = []
             grand_total = 0
             for _, row in selected_rows.iterrows():
-                row_sale_qty = number_value(row.get("Sale Qty", 0))
-                row_sale_price = number_value(row.get("Sale Price", 0))
-                if row_sale_qty > 0:
-                    amount = row_sale_qty * row_sale_price
-                    items_to_print.append({"name": f"{row['Brand']} {row['Item']}", "qty": row_sale_qty, "price": row_sale_price, "amount": amount})
+                if row['Sale Qty'] > 0:
+                    amount = row['Sale Qty'] * row['Sale Price']
+                    items_to_print.append({"name": f"{row['Brand']} {row['Item']}", "qty": row['Sale Qty'], "price": row['Sale Price'], "amount": amount})
                     grand_total += amount
             show_receipt_ui(cust_name, items_to_print, grand_total)
-        else:
-            st.warning("Select rows to print.")
 
 else:
     st.info("No transaction history found.")
