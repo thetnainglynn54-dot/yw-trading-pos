@@ -1936,7 +1936,7 @@ if not df.empty:
         st.markdown(
             f"""
             <div style="border-left: 4px solid #ff4b4b; background: #f8fafc; padding: 12px 14px; border-radius: 8px; font-weight: 700;">
-                📊 Filtered Total Sales: <span style="color:#ff4b4b;">{filtered_total_sales:,.0f} THB</span>
+                📊 Total Sales: <span style="color:#ff4b4b;">{filtered_total_sales:,.0f} THB</span>
             </div>
             """,
             unsafe_allow_html=True
@@ -1945,7 +1945,7 @@ if not df.empty:
         st.markdown(
             f"""
             <div style="border-left: 4px solid #0ea5e9; background: #f8fafc; padding: 12px 14px; border-radius: 8px; font-weight: 700;">
-                🛒 Filtered Total Purchases: <span style="color:#0b84f3;">{filtered_total_purchases:,.0f} THB</span>
+                🛒 Total Purchases: <span style="color:#0b84f3;">{filtered_total_purchases:,.0f} THB</span>
             </div>
             """,
             unsafe_allow_html=True
@@ -1954,7 +1954,7 @@ if not df.empty:
         st.markdown(
             f"""
             <div style="border-left: 4px solid #ef4444; background: #f8fafc; padding: 12px 14px; border-radius: 8px; font-weight: 700;">
-                💸 Filtered Total Expense: <span style="color:#ef4444;">{filtered_total_expense:,.0f} THB</span>
+                💸 Total Expenses: <span style="color:#ef4444;">{filtered_total_expense:,.0f} THB</span>
             </div>
             """,
             unsafe_allow_html=True
@@ -1963,7 +1963,7 @@ if not df.empty:
         st.markdown(
             f"""
             <div style="border-left: 4px solid #22c55e; background: #f8fafc; padding: 12px 14px; border-radius: 8px; font-weight: 700;">
-                💰 Filtered Total Income: <span style="color:#16a34a;">{filtered_total_income:,.0f} THB</span>
+                💰 Total Income: <span style="color:#16a34a;">{filtered_total_income:,.0f} THB</span>
             </div>
             """,
             unsafe_allow_html=True
