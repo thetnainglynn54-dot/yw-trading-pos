@@ -1920,14 +1920,19 @@ if not df.empty:
     if sel_item != "All": h_df = h_df[h_df["Item"] == sel_item]
 
     summary_df = h_df.copy()
-    for total_col in ["Purchase Qty", "Pur Price", "Sale Qty", "Sale Price"]:
-        summary_df[total_col] = pd.to_numeric(summary_df[total_col], errors="coerce").fillna(0.0)
+    for total_col in ["Purchase Qty", "Pur Price", "Sale Qty", "Sale Price", "Expense", "Other Income"]:
+        if total_col in summary_df.columns:
+            summary_df[total_col] = pd.to_numeric(summary_df[total_col], errors="coerce").fillna(0.0)
+        else:
+            summary_df[total_col] = 0.0
 
     filtered_total_sales = (summary_df["Sale Qty"] * summary_df["Sale Price"]).sum()
     filtered_total_purchases = (summary_df["Purchase Qty"] * summary_df["Pur Price"]).sum()
+    filtered_total_expense = summary_df["Expense"].sum()
+    filtered_total_income = summary_df["Other Income"].sum()
 
-    sum_col1, sum_col2 = st.columns(2)
-    with sum_col1:
+    sum_cols = st.columns(4)
+    with sum_cols[0]:
         st.markdown(
             f"""
             <div style="border-left: 4px solid #ff4b4b; background: #f8fafc; padding: 12px 14px; border-radius: 8px; font-weight: 700;">
@@ -1936,11 +1941,29 @@ if not df.empty:
             """,
             unsafe_allow_html=True
         )
-    with sum_col2:
+    with sum_cols[1]:
         st.markdown(
             f"""
             <div style="border-left: 4px solid #0ea5e9; background: #f8fafc; padding: 12px 14px; border-radius: 8px; font-weight: 700;">
                 🛒 Filtered Total Purchases: <span style="color:#0b84f3;">{filtered_total_purchases:,.0f} THB</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with sum_cols[2]:
+        st.markdown(
+            f"""
+            <div style="border-left: 4px solid #ef4444; background: #f8fafc; padding: 12px 14px; border-radius: 8px; font-weight: 700;">
+                💸 Filtered Total Expense: <span style="color:#ef4444;">{filtered_total_expense:,.0f} THB</span>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with sum_cols[3]:
+        st.markdown(
+            f"""
+            <div style="border-left: 4px solid #22c55e; background: #f8fafc; padding: 12px 14px; border-radius: 8px; font-weight: 700;">
+                💰 Filtered Total Income: <span style="color:#16a34a;">{filtered_total_income:,.0f} THB</span>
             </div>
             """,
             unsafe_allow_html=True
