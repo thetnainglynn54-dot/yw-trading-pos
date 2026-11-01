@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import json
 import hashlib
+import uuid
 from io import BytesIO
 from datetime import datetime, date
 from streamlit_gsheets import GSheetsConnection
@@ -12,7 +13,9 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 EXPECTED_COLS = ["Date", "Customer", "Payment", "Brand", "Category", "Item",
                  "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Sale Price",
-                 "Stock", "Balance", "Other Income", "Expense", "Created By"]
+                 "Stock", "Balance", "Other Income", "Expense", "Created By",
+                 "Transaction ID", "Customer Type", "Discount"]
+BASE_EXPECTED_COLS = EXPECTED_COLS[:-3]
 USERS_WORKSHEET = "users"
 USERS_COLS = ["username", "password_hash", "password_salt", "active", "permissions", "role"]
 
@@ -228,6 +231,27 @@ def get_worksheet():
         spreadsheet=conn.client._spreadsheet,
         worksheet=conn.client._worksheet
     )
+
+
+def generate_transaction_id():
+    return f"YW-{datetime.now():%Y%m%d%H%M%S}-{uuid.uuid4().hex[:6].upper()}"
+
+
+def ensure_transaction_field_headers(worksheet):
+    headers = worksheet.row_values(1)
+    if not headers:
+        raise ValueError("Google Sheets is missing its transaction header row.")
+    if len(headers) < len(BASE_EXPECTED_COLS):
+        raise ValueError("Google Sheets is missing one or more existing transaction columns.")
+
+    new_headers = EXPECTED_COLS[len(BASE_EXPECTED_COLS):]
+    existing_new_headers = headers[len(BASE_EXPECTED_COLS):len(EXPECTED_COLS)]
+    for existing, expected in zip(existing_new_headers, new_headers):
+        if existing and existing != expected:
+            raise ValueError(f"Google Sheets column for {expected} already has a different header.")
+
+    if existing_new_headers != new_headers:
+        worksheet.update(values=[new_headers], range_name="Q1:S1", value_input_option="USER_ENTERED")
 
 
 def as_sheet_value(value):
@@ -897,9 +921,12 @@ df = load_data()
 if "reset_trigger" not in st.session_state:
     st.session_state.reset_trigger = False
 
+if "transaction_id" not in st.session_state:
+    st.session_state.transaction_id = generate_transaction_id()
+
 if st.session_state.reset_trigger:
     # á€žá€á€ºá€™á€¾á€á€ºá€‘á€¬á€¸á€žá€±á€¬ key á€™á€»á€¬á€¸á€€á€­á€¯ loop á€•á€á€ºá á€¡á€œá€½á€á€º (á€žá€­á€¯á€·á€™á€Ÿá€¯á€á€º) 0 á€•á€¼á€”á€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€á€¼á€„á€ºá€¸
-    keys_to_reset = ["pq", "pp", "sq", "sp", "fi", "fe", "c_name", "p_type_new"]
+    keys_to_reset = ["pq", "pp", "sq", "sp", "fi", "fe", "c_name", "p_type_new", "customer_type", "discount"]
     for k in keys_to_reset:
         if k in st.session_state:
             # á€…á€¬á€žá€¬á€¸á€–á€¼á€…á€ºá€•á€«á€€ á€¡á€œá€½á€á€ºáŠ á€‚á€á€”á€ºá€¸á€–á€¼á€…á€ºá€•á€«á€€ 0.0 á€‘á€¬á€¸á€™á€Šá€º
@@ -916,6 +943,8 @@ if st.session_state.reset_trigger:
     for key, default_val in dropdown_keys.items():
         if key in st.session_state:
             st.session_state[key] = default_val
+
+    st.session_state.transaction_id = generate_transaction_id()
     
     st.session_state.reset_trigger = False
 
@@ -1677,14 +1706,24 @@ with r1_c1:
     )
 
 with r1_c2:
-    cust_list = sorted([str(x) for x in df["Customer"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else []
-    c_sel = st.selectbox("Customer Name", ["Choose Customer"] + cust_list + add_new_options, key="cust_drop")
-    cust_name = st.text_input("New Customer Name", placeholder="Enter customer name...", key="c_name") if c_sel == "+ Add New" else (c_sel if c_sel != "Choose Customer" else "")
+    st.text_input("Transaction ID", key="transaction_id", disabled=True)
 
 with r1_c3:
     pay_list = sorted([str(x) for x in df["Payment"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else ["Cash", "KPay", "Wave"]
     p_sel = st.selectbox("Payment Method", ["Choose Payment"] + pay_list + add_new_options, key="pay_drop")
     pay_type = st.text_input("New Payment Method", key="p_type_new") if p_sel == "+ Add New" else (p_sel if p_sel != "Choose Payment" else "Cash")
+
+r2_c1, r2_c2, r2_c3 = st.columns([1, 1, 1])
+with r2_c1:
+    cust_list = sorted([str(x) for x in df["Customer"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else []
+    c_sel = st.selectbox("Customer Name", ["Choose Customer"] + cust_list + add_new_options, key="cust_drop")
+    cust_name = st.text_input("New Customer Name", placeholder="Enter customer name...", key="c_name") if c_sel == "+ Add New" else (c_sel if c_sel != "Choose Customer" else "")
+
+with r2_c2:
+    customer_type = st.text_input("Customer Type", placeholder="e.g. Retail / Wholesale", key="customer_type")
+
+with r2_c3:
+    discount_value = st.number_input("Discount", min_value=0.0, step=1.0, key="discount")
 
 f2, f3, f4 = st.columns(3)
 with f2:
@@ -1854,10 +1893,14 @@ if st.button("Save Transaction", use_container_width=True, type="primary"):
                     "Balance": balance,
                     "Other Income": float(f_inc_val),
                     "Expense": float(f_exp_val),
-                    "Created By": st.session_state.get("current_user", "Unknown")
+                    "Created By": st.session_state.get("current_user", "Unknown"),
+                    "Transaction ID": st.session_state.transaction_id,
+                    "Customer Type": customer_type.strip() if customer_type.strip() else "-",
+                    "Discount": float(discount_value),
                 }
 
                 worksheet = get_worksheet()
+                ensure_transaction_field_headers(worksheet)
                 worksheet.append_row(
                     [as_sheet_value(row_data[col]) for col in EXPECTED_COLS],
                     value_input_option="USER_ENTERED"
