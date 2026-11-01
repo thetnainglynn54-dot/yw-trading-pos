@@ -3,7 +3,7 @@ import pandas as pd
 import os
 import json
 import hashlib
-import uuid
+import secrets
 from io import BytesIO
 from datetime import datetime, date
 from streamlit_gsheets import GSheetsConnection
@@ -234,8 +234,17 @@ def get_worksheet():
     )
 
 
-def generate_transaction_id():
-    return f"YW-{datetime.now():%Y%m%d%H%M%S}-{uuid.uuid4().hex[:6].upper()}"
+def generate_transaction_id(existing_ids=None):
+    existing = {
+        str(value).strip().lower()
+        for value in (existing_ids if existing_ids is not None else [])
+        if str(value).strip()
+    }
+    for _ in range(1000):
+        transaction_id = f"yw-{secrets.randbelow(900000) + 100000}"
+        if transaction_id.lower() not in existing:
+            return transaction_id
+    raise RuntimeError("Could not generate a unique transaction ID.")
 
 
 def column_letter(column_number):
@@ -948,7 +957,8 @@ if "reset_trigger" not in st.session_state:
     st.session_state.reset_trigger = False
 
 if "transaction_id" not in st.session_state:
-    st.session_state.transaction_id = generate_transaction_id()
+    existing_transaction_ids = df["Transaction ID"] if "Transaction ID" in df.columns else []
+    st.session_state.transaction_id = generate_transaction_id(existing_transaction_ids)
 
 if st.session_state.reset_trigger:
     # á€žá€á€ºá€™á€¾á€á€ºá€‘á€¬á€¸á€žá€±á€¬ key á€™á€»á€¬á€¸á€€á€­á€¯ loop á€•á€á€ºá á€¡á€œá€½á€á€º (á€žá€­á€¯á€·á€™á€Ÿá€¯á€á€º) 0 á€•á€¼á€”á€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€á€¼á€„á€ºá€¸
@@ -971,7 +981,8 @@ if st.session_state.reset_trigger:
         if key in st.session_state:
             st.session_state[key] = default_val
 
-    st.session_state.transaction_id = generate_transaction_id()
+    existing_transaction_ids = df["Transaction ID"] if "Transaction ID" in df.columns else []
+    st.session_state.transaction_id = generate_transaction_id(existing_transaction_ids)
     
     st.session_state.reset_trigger = False
 
