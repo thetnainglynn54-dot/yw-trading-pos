@@ -270,6 +270,9 @@ def ensure_transaction_field_headers(worksheet):
     if new_headers:
         start_column = len(headers) + 1
         end_column = start_column + len(new_headers) - 1
+        additional_columns = end_column - worksheet.col_count
+        if additional_columns > 0:
+            worksheet.add_cols(additional_columns)
         range_name = f"{column_letter(start_column)}1:{column_letter(end_column)}1"
         worksheet.update(values=[new_headers], range_name=range_name, value_input_option="USER_ENTERED")
 
