@@ -926,11 +926,11 @@ if "transaction_id" not in st.session_state:
 
 if st.session_state.reset_trigger:
     # á€žá€á€ºá€™á€¾á€á€ºá€‘á€¬á€¸á€žá€±á€¬ key á€™á€»á€¬á€¸á€€á€­á€¯ loop á€•á€á€ºá á€¡á€œá€½á€á€º (á€žá€­á€¯á€·á€™á€Ÿá€¯á€á€º) 0 á€•á€¼á€”á€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€á€¼á€„á€ºá€¸
-    keys_to_reset = ["pq", "pp", "sq", "sp", "fi", "fe", "c_name", "p_type_new", "customer_type", "discount"]
+    keys_to_reset = ["pq", "pp", "sq", "sp", "fi", "fe", "c_name", "p_type_new", "customer_id_new", "discount"]
     for k in keys_to_reset:
         if k in st.session_state:
             # á€…á€¬á€žá€¬á€¸á€–á€¼á€…á€ºá€•á€«á€€ á€¡á€œá€½á€á€ºáŠ á€‚á€á€”á€ºá€¸á€–á€¼á€…á€ºá€•á€«á€€ 0.0 á€‘á€¬á€¸á€™á€Šá€º
-            st.session_state[k] = "" if any(word in k for word in ["name", "type"]) else 0.0
+            st.session_state[k] = "" if any(word in k for word in ["name", "type"]) or k == "customer_id_new" else 0.0
             
     # Sidebar Dropdown á€™á€»á€¬á€¸á€€á€­á€¯ á€™á€°á€œá€¡á€á€­á€¯á€„á€ºá€¸ á€•á€¼á€”á€ºá€‘á€¬á€¸á€á€¼á€„á€ºá€¸
     dropdown_keys = {
@@ -938,6 +938,7 @@ if st.session_state.reset_trigger:
         "c_drop": "Choose Category",
         "i_drop": "Choose Item",
         "cust_drop": "Choose Customer",
+        "customer_id_select": "Choose Customer ID",
         "pay_drop": "Choose Payment"
     }
     for key, default_val in dropdown_keys.items():
@@ -1716,11 +1717,20 @@ with r1_c3:
 r2_c1, r2_c2, r2_c3 = st.columns([1, 1, 1])
 with r2_c1:
     cust_list = sorted([str(x) for x in df["Customer"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else []
-    c_sel = st.selectbox("Customer Name", ["Choose Customer"] + cust_list + add_new_options, key="cust_drop")
-    cust_name = st.text_input("New Customer Name", placeholder="Enter customer name...", key="c_name") if c_sel == "+ Add New" else (c_sel if c_sel != "Choose Customer" else "")
+    c_sel = st.selectbox("Customer", ["Choose Customer"] + cust_list + add_new_options, key="cust_drop")
+    cust_name = st.text_input("New Customer", placeholder="Enter customer name...", key="c_name") if c_sel == "+ Add New" else (c_sel if c_sel != "Choose Customer" else "")
 
 with r2_c2:
-    customer_type = st.text_input("Customer Type", placeholder="e.g. Retail / Wholesale", key="customer_type")
+    customer_id_list = sorted([
+        str(x) for x in df["Customer Type"].dropna().unique()
+        if str(x).strip() not in ["", "-", "nan", "None"]
+    ]) if not df.empty and "Customer Type" in df.columns else []
+    customer_id_sel = st.selectbox(
+        "Customer ID",
+        ["Choose Customer ID"] + customer_id_list + add_new_options,
+        key="customer_id_select",
+    )
+    customer_id = st.text_input("New Customer ID", key="customer_id_new") if customer_id_sel == "+ Add New" else (customer_id_sel if customer_id_sel != "Choose Customer ID" else "")
 
 with r2_c3:
     discount_value = st.number_input("Discount", min_value=0.0, step=1.0, key="discount")
@@ -1895,7 +1905,7 @@ if st.button("Save Transaction", use_container_width=True, type="primary"):
                     "Expense": float(f_exp_val),
                     "Created By": st.session_state.get("current_user", "Unknown"),
                     "Transaction ID": st.session_state.transaction_id,
-                    "Customer Type": customer_type.strip() if customer_type.strip() else "-",
+                    "Customer Type": customer_id if customer_id else "-",
                     "Discount": float(discount_value),
                 }
 
