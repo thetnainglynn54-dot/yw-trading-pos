@@ -2057,6 +2057,11 @@ if not df.empty:
         h_df["Original_Index"] = h_df.index
     h_df = h_df.sort_values(by="Original_Index", ascending=False).reset_index(drop=True)
     display_df = h_df.copy()
+    if "Customer" in display_df.columns and "Customer Type" in display_df.columns:
+        display_cols = list(display_df.columns)
+        display_cols.remove("Customer Type")
+        display_cols.insert(display_cols.index("Customer") + 1, "Customer Type")
+        display_df = display_df[display_cols]
     display_df.insert(0, "Select", False)
     read_only_cols = [col for col in display_df.columns if col != "Select"]
 
