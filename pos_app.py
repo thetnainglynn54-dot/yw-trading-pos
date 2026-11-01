@@ -2076,6 +2076,7 @@ if not df.empty:
         disabled=read_only_cols,
         column_config={
             "Select": st.column_config.CheckboxColumn("Select", default=False),
+            "Customer Type": st.column_config.TextColumn("CID"),
             "Original_Index": None # User á€€á€­á€¯ á€™á€•á€¼á€•á€«
         },
         key=t_key
