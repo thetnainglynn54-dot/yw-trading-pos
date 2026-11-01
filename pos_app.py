@@ -961,7 +961,7 @@ if st.session_state.reset_trigger:
         "c_drop": "Choose Category",
         "i_drop": "Choose Item",
         "cust_drop": "Choose Customer",
-        "customer_id_select": "Choose Customer ID",
+        "customer_id_select": "Choose CID",
         "pay_drop": "Choose Payment"
     }
     for key, default_val in dropdown_keys.items():
@@ -1749,11 +1749,11 @@ with r2_c2:
         if str(x).strip() not in ["", "-", "nan", "None"]
     ]) if not df.empty and "Customer Type" in df.columns else []
     customer_id_sel = st.selectbox(
-        "Customer ID",
-        ["Choose Customer ID"] + customer_id_list + add_new_options,
+        "CID",
+        ["Choose CID"] + customer_id_list + add_new_options,
         key="customer_id_select",
     )
-    customer_id = st.text_input("New Customer ID", key="customer_id_new") if customer_id_sel == "+ Add New" else (customer_id_sel if customer_id_sel != "Choose Customer ID" else "")
+    customer_id = st.text_input("New CID", key="customer_id_new") if customer_id_sel == "+ Add New" else (customer_id_sel if customer_id_sel != "Choose CID" else "")
 
 with r2_c3:
     discount_value = st.number_input("Discount", min_value=0.0, step=1.0, key="discount")
