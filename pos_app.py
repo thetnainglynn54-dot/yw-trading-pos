@@ -16,6 +16,7 @@ EXPECTED_COLS = ["Date", "Customer", "Payment", "Brand", "Category", "Item",
                  "Stock", "Balance", "Other Income", "Expense", "Created By",
                  "Transaction ID", "Customer Type", "Discount"]
 BASE_EXPECTED_COLS = EXPECTED_COLS[:-3]
+TRANSACTION_EXTRA_COLS = EXPECTED_COLS[len(BASE_EXPECTED_COLS):]
 USERS_WORKSHEET = "users"
 USERS_COLS = ["username", "password_hash", "password_salt", "active", "permissions", "role"]
 
@@ -237,21 +238,42 @@ def generate_transaction_id():
     return f"YW-{datetime.now():%Y%m%d%H%M%S}-{uuid.uuid4().hex[:6].upper()}"
 
 
+def column_letter(column_number):
+    letters = ""
+    while column_number:
+        column_number, remainder = divmod(column_number - 1, 26)
+        letters = chr(65 + remainder) + letters
+    return letters
+
+
 def ensure_transaction_field_headers(worksheet):
-    headers = worksheet.row_values(1)
-    if not headers:
-        raise ValueError("Google Sheets is missing its transaction header row.")
-    if len(headers) < len(BASE_EXPECTED_COLS):
+    headers = [str(value).strip() for value in worksheet.row_values(1)]
+    if not headers or len(headers) < len(BASE_EXPECTED_COLS):
         raise ValueError("Google Sheets is missing one or more existing transaction columns.")
 
-    new_headers = EXPECTED_COLS[len(BASE_EXPECTED_COLS):]
-    existing_new_headers = headers[len(BASE_EXPECTED_COLS):len(EXPECTED_COLS)]
-    for existing, expected in zip(existing_new_headers, new_headers):
-        if existing and existing != expected:
-            raise ValueError(f"Google Sheets column for {expected} already has a different header.")
+    field_positions = {}
+    new_headers = []
+    next_column = len(headers) + 1
+    for field in TRANSACTION_EXTRA_COLS:
+        matches = [index + 1 for index, header in enumerate(headers) if header == field]
+        if len(matches) > 1:
+            raise ValueError(f"Google Sheets has more than one column named {field}.")
+        if matches:
+            if matches[0] <= len(BASE_EXPECTED_COLS):
+                raise ValueError(f"Google Sheets column for {field} conflicts with an existing transaction field.")
+            field_positions[field] = matches[0]
+        else:
+            field_positions[field] = next_column
+            new_headers.append(field)
+            next_column += 1
 
-    if existing_new_headers != new_headers:
-        worksheet.update(values=[new_headers], range_name="Q1:S1", value_input_option="USER_ENTERED")
+    if new_headers:
+        start_column = len(headers) + 1
+        end_column = start_column + len(new_headers) - 1
+        range_name = f"{column_letter(start_column)}1:{column_letter(end_column)}1"
+        worksheet.update(values=[new_headers], range_name=range_name, value_input_option="USER_ENTERED")
+
+    return field_positions
 
 
 def as_sheet_value(value):
@@ -743,17 +765,18 @@ def load_data():
         df = conn.read(ttl=60)
         
         if df is not None and not df.empty:
-            # á‚á‹ Column á€¡á€™á€Šá€ºá€™á€»á€¬á€¸ á€á€°á€Šá€®á€™á€¾á€¯á€›á€¾á€­á€…á€±á€›á€”á€º á€žá€á€ºá€™á€¾á€á€ºá€á€¼á€„á€ºá€¸ 
-            # (Google Sheet á€á€½á€„á€º rowid á€™á€›á€¾á€­á€žá€–á€¼á€„á€·á€º Index á€€á€­á€¯á€žá€¬ ID á€¡á€–á€¼á€…á€º á€žá€¯á€¶á€¸á€•á€«á€™á€Šá€º)
-            # Column á€•á€±á€«á€„á€ºá€¸ áá… á€á€¯ (ID á€™á€•á€«á€˜á€²)
-            expected_cols = EXPECTED_COLS
-            
-            # Column á€¡á€™á€Šá€ºá€™á€»á€¬á€¸ á€œá€½á€²á€á€»á€±á€¬á€ºá€”á€±á€•á€«á€€ á€•á€¼á€”á€ºá€Šá€¾á€­á€•á€±á€¸á€á€¼á€„á€ºá€¸
-            if len(df.columns) < len(expected_cols):
-                for col in expected_cols[len(df.columns):]:
-                    df[col] = ""
-            df = df.iloc[:, :len(expected_cols)]
-            df.columns = expected_cols
+            source_df = df.copy()
+            for index in range(len(source_df.columns), len(BASE_EXPECTED_COLS)):
+                source_df[f"_missing_base_column_{index}"] = ""
+
+            df = source_df.iloc[:, :len(BASE_EXPECTED_COLS)].copy()
+            df.columns = BASE_EXPECTED_COLS
+            for extra_col in TRANSACTION_EXTRA_COLS:
+                extra_positions = [
+                    index for index, column_name in enumerate(source_df.columns)
+                    if index >= len(BASE_EXPECTED_COLS) and str(column_name).strip() == extra_col
+                ]
+                df[extra_col] = source_df.iloc[:, extra_positions[-1]].values if extra_positions else ""
             df["Original_Index"] = df.index
             
             # áƒá‹ Date format á€€á€­á€¯ á€á€­á€€á€»á€¡á€±á€¬á€„á€º á€•á€¼á€±á€¬á€„á€ºá€¸á€œá€²á€á€¼á€„á€ºá€¸
@@ -1910,9 +1933,15 @@ if st.button("Save Transaction", use_container_width=True, type="primary"):
                 }
 
                 worksheet = get_worksheet()
-                ensure_transaction_field_headers(worksheet)
+                extra_field_positions = ensure_transaction_field_headers(worksheet)
+                sheet_headers = worksheet.row_values(1)
+                sheet_row = [""] * len(sheet_headers)
+                for index, column_name in enumerate(BASE_EXPECTED_COLS):
+                    sheet_row[index] = as_sheet_value(row_data[column_name])
+                for column_name, column_index in extra_field_positions.items():
+                    sheet_row[column_index - 1] = as_sheet_value(row_data[column_name])
                 worksheet.append_row(
-                    [as_sheet_value(row_data[col]) for col in EXPECTED_COLS],
+                    sheet_row,
                     value_input_option="USER_ENTERED"
                 )
                 clear_data_cache()
