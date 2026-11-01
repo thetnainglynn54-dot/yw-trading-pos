@@ -1754,18 +1754,32 @@ with r1_c3:
 r2_c1, r2_c2, r2_c3 = st.columns([1, 1, 1])
 with r2_c1:
     cust_list = sorted([str(x) for x in df["Customer"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else []
-    c_sel = st.selectbox("Customer", ["Choose Customer"] + cust_list + add_new_options, key="cust_drop")
+    def reset_customer_id_selection():
+        st.session_state["customer_id_select"] = "Choose CID"
+
+    c_sel = st.selectbox(
+        "Customer",
+        ["Choose Customer"] + cust_list + add_new_options,
+        key="cust_drop",
+        on_change=reset_customer_id_selection,
+    )
     cust_name = st.text_input("New Customer", placeholder="Enter customer name...", key="c_name") if c_sel == "+ Add New" else (c_sel if c_sel != "Choose Customer" else "")
 
 with r2_c2:
-    customer_id_list = sorted([
-        str(x) for x in df["Customer Type"].dropna().unique()
-        if str(x).strip() not in ["", "-", "nan", "None"]
-    ]) if not df.empty and "Customer Type" in df.columns else []
+    selected_customer = str(cust_name).strip()
+    if selected_customer and not df.empty and "Customer Type" in df.columns:
+        customer_rows = df[df["Customer"].astype(str).str.strip() == selected_customer]
+        customer_id_list = sorted([
+            str(x) for x in customer_rows["Customer Type"].dropna().unique()
+            if str(x).strip() not in ["", "-", "nan", "None"]
+        ])
+    else:
+        customer_id_list = []
     customer_id_sel = st.selectbox(
         "CID",
         ["Choose CID"] + customer_id_list + add_new_options,
         key="customer_id_select",
+        disabled=not bool(selected_customer),
     )
     customer_id = st.text_input("New CID", key="customer_id_new") if customer_id_sel == "+ Add New" else (customer_id_sel if customer_id_sel != "Choose CID" else "")
 
