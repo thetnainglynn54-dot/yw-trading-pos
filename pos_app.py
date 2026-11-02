@@ -1135,7 +1135,7 @@ if is_admin_user():
 if not df.empty and has_permission("edit_names"):
     with st.sidebar.expander("Edit Names", expanded=False):
         edit_reset_key = st.session_state.get("edit_names_reset_key", 0)
-        edit_type = st.radio("What to change?", ["Brand", "Category", "Item", "Customer", "Payment"], key=f"side_edit_type_{edit_reset_key}")
+        edit_type = st.radio("What to change?", ["Brand", "Category", "Item", "Customer", "CID", "Payment"], key=f"side_edit_type_{edit_reset_key}")
         
         # Group Selection -----
         if edit_type in ["Brand", "Category", "Item"]:
@@ -1149,15 +1149,24 @@ if not df.empty and has_permission("edit_names"):
                 current_list = [sel_c]
             else: # Item
                 current_list = sorted(df[(df["Brand"] == sel_b) & (df["Category"] == sel_c)]["Item"].unique())
+        elif edit_type == "CID":
+            cid_customers = sorted([str(x) for x in df["Customer"].dropna().unique() if str(x).strip() not in ["", "-"]])
+            sel_cid_customer = st.selectbox("Select Customer", options=cid_customers, key=f"edit_cid_customer_{edit_reset_key}")
+            cid_rows = df[df["Customer"].astype(str) == sel_cid_customer]
+            current_list = sorted([
+                str(x) for x in cid_rows.get("Customer Type", pd.Series(dtype=str)).dropna().unique()
+                if str(x).strip() not in ["", "-", "0", "nan", "None"]
+            ])
         else:
             current_list = sorted([str(x) for x in df[edit_type].unique() if str(x) not in ["-", "0", "nan", ""]])
 
         # FF_2 >>> Cloud Update Logic -----
         if current_list:
-            old_val = st.selectbox(f"Select existing {edit_type}", options=current_list, key=f"side_old_val_{edit_reset_key}")
+            edit_label = "CID" if edit_type == "CID" else edit_type
+            old_val = st.selectbox(f"Select existing {edit_label}", options=current_list, key=f"side_old_val_{edit_reset_key}")
             new_val = st.text_input(f"New name for {old_val}", key=f"side_new_val_{edit_reset_key}")
             
-            if st.button(f"Update {edit_type}", type="primary", use_container_width=True, key=f"update_name_{edit_reset_key}"):
+            if st.button(f"Update {edit_label}", type="primary", use_container_width=True, key=f"update_name_{edit_reset_key}"):
                 if old_val and new_val and old_val != new_val:
                     try:
                         # áá‹ á€œá€€á€ºá€›á€¾á€­ data á€¡á€¬á€¸á€œá€¯á€¶á€¸á€€á€­á€¯ á€–á€á€ºá€•á€«
@@ -1168,10 +1177,13 @@ if not df.empty and has_permission("edit_names"):
                             mask = (all_df["Brand"] == sel_b) & (all_df["Category"] == old_val)
                         elif edit_type == "Item":
                             mask = (all_df["Brand"] == sel_b) & (all_df["Category"] == sel_c) & (all_df["Item"] == old_val)
+                        elif edit_type == "CID":
+                            mask = (all_df["Customer"].astype(str) == sel_cid_customer) & (all_df["Customer Type"].astype(str) == old_val)
                         else:
                             mask = all_df[edit_type] == old_val
                         
-                        all_df.loc[mask, edit_type] = new_val
+                        target_column = "Customer Type" if edit_type == "CID" else edit_type
+                        all_df.loc[mask, target_column] = new_val
                         
                         # áƒá‹ Cloud á€•á€±á€«á€ºá€žá€­á€¯á€· Update á€œá€¯á€•á€ºá€•á€«
                         # á„á‹ Item á€¡á€™á€Šá€ºá€•á€¼á€±á€¬á€„á€ºá€¸á€œá€²á€á€¼á€„á€ºá€¸á€–á€¼á€…á€ºá€•á€«á€€ Stock á€™á€»á€¬á€¸á€€á€­á€¯ á€•á€¼á€”á€ºá€Šá€¾á€­á€•á€«
@@ -1181,7 +1193,7 @@ if not df.empty and has_permission("edit_names"):
                         conn.update(data=all_df)
                         clear_data_cache()
                         
-                        st.success(f"✅ Updated {edit_type} to '{new_val}'!")
+                        st.success(f"✅ Updated {edit_label} to '{new_val}'!")
                         st.session_state.edit_names_reset_key = edit_reset_key + 1
                         st.session_state.reset_trigger = True
                         st.rerun()
