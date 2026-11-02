@@ -2090,6 +2090,16 @@ if not df.empty:
         display_cols.remove("Customer Type")
         display_cols.insert(display_cols.index("Customer") + 1, "Customer Type")
         display_df = display_df[display_cols]
+    if "Discount" in display_df.columns and "Sale Price" in display_df.columns:
+        display_cols = list(display_df.columns)
+        display_cols.remove("Discount")
+        display_cols.insert(display_cols.index("Sale Price") + 1, "Discount")
+        display_df = display_df[display_cols]
+    if "Transaction ID" in display_df.columns and "Expense" in display_df.columns:
+        display_cols = list(display_df.columns)
+        display_cols.remove("Transaction ID")
+        display_cols.insert(display_cols.index("Expense") + 1, "Transaction ID")
+        display_df = display_df[display_cols]
     display_df.insert(0, "Select", False)
     read_only_cols = [col for col in display_df.columns if col != "Select"]
 
