@@ -2129,13 +2129,26 @@ if not df.empty:
     read_only_cols = [col for col in display_df.columns if col != "Select"]
 
     t_key = f"hist_table_{st.session_state.get('table_key', 0)}"
+    editor_state = st.session_state.get(t_key, {})
+    edited_rows = editor_state.get("edited_rows", {}) if isinstance(editor_state, dict) else {}
+    selected_editor_rows = {
+        int(row_idx) for row_idx, changes in edited_rows.items()
+        if isinstance(changes, dict) and changes.get("Select", False)
+    }
+
+    def highlight_selected_history_row(row):
+        if row.name in selected_editor_rows:
+            return ["background-color: #fde8e8"] * len(row)
+        return [""] * len(row)
+
+    styled_display_df = display_df.style.apply(highlight_selected_history_row, axis=1)
     edited_df = st.data_editor(
-        display_df,
+        styled_display_df,
         use_container_width=True,
         hide_index=True,
         disabled=read_only_cols,
         column_config={
-            "Select": st.column_config.CheckboxColumn("Select", default=False),
+            "Select": st.column_config.CheckboxColumn("Select", default=False, width="small"),
             "Customer Type": st.column_config.TextColumn("CID"),
             "Original_Index": None # User á€€á€­á€¯ á€™á€•á€¼á€•á€«
         },
