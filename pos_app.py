@@ -2137,6 +2137,8 @@ if not df.empty:
         column_config={
             "Select": st.column_config.CheckboxColumn("Select", default=False),
             "Customer Type": st.column_config.TextColumn("CID"),
+            "Purchase Qty": st.column_config.NumberColumn("Pur Qty"),
+            "Other Income": st.column_config.NumberColumn("Income"),
             "Original_Index": None # User á€€á€­á€¯ á€™á€•á€¼á€•á€«
         },
         key=t_key
