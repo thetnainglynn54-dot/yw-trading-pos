@@ -1993,12 +1993,24 @@ st.write("#### 📋 Transaction History")
 
 if not df.empty:
     # Filter á€™á€»á€¬á€¸á€€á€­á€¯ á€á€…á€ºá€á€”á€ºá€¸á€á€Šá€ºá€¸á€•á€¼á€á€¼á€„á€ºá€¸
-    f1, f2, f3, f4, f5 = st.columns(5)
-    with f1: sel_cus = st.selectbox("Filter by Customer", ["All"] + sorted(df["Customer"].dropna().unique().tolist()), key="f_cus")
-    with f2: sel_pay = st.selectbox("Filter by Payment", ["All"] + sorted(df["Payment"].dropna().unique().tolist()), key="f_pay")
-    with f3: sel_brand = st.selectbox("Filter by Brand", ["All"] + sorted(df["Brand"].dropna().unique().tolist()), key="f_brand")
-    with f4: sel_cat = st.selectbox("Filter by Category", ["All"] + sorted(df["Category"].dropna().unique().tolist()), key="f_cat")
-    with f5: sel_item = st.selectbox("Filter by Item", ["All"] + sorted(df["Item"].dropna().unique().tolist()), key="f_item")
+    def reset_cid_history_filter():
+        st.session_state["f_cid"] = "All"
+
+    f1, f2, f3, f4, f5, f6 = st.columns(6)
+    with f1: sel_cus = st.selectbox("Filter by Customer", ["All"] + sorted(df["Customer"].dropna().unique().tolist()), key="f_cus", on_change=reset_cid_history_filter)
+    if "Customer Type" in df.columns:
+        cid_source = df if sel_cus == "All" else df[df["Customer"] == sel_cus]
+        cid_options = sorted([
+            str(value) for value in cid_source["Customer Type"].dropna().unique()
+            if str(value).strip() not in ["", "-", "nan", "None"]
+        ])
+    else:
+        cid_options = []
+    with f2: sel_cid = st.selectbox("Filter by CID", ["All"] + cid_options, key="f_cid")
+    with f3: sel_pay = st.selectbox("Filter by Payment", ["All"] + sorted(df["Payment"].dropna().unique().tolist()), key="f_pay")
+    with f4: sel_brand = st.selectbox("Filter by Brand", ["All"] + sorted(df["Brand"].dropna().unique().tolist()), key="f_brand")
+    with f5: sel_cat = st.selectbox("Filter by Category", ["All"] + sorted(df["Category"].dropna().unique().tolist()), key="f_cat")
+    with f6: sel_item = st.selectbox("Filter by Item", ["All"] + sorted(df["Item"].dropna().unique().tolist()), key="f_item")
 
     # Date Range á€”á€¾á€„á€·á€º á€á€œá€¯á€á€ºá€™á€»á€¬á€¸
     with st.container(border=True):
@@ -2024,6 +2036,7 @@ if not df.empty:
     h_df = h_df.loc[mask]
 
     if sel_cus != "All": h_df = h_df[h_df["Customer"] == sel_cus]
+    if sel_cid != "All" and "Customer Type" in h_df.columns: h_df = h_df[h_df["Customer Type"].astype(str).str.strip() == sel_cid]
     if sel_pay != "All": h_df = h_df[h_df["Payment"] == sel_pay]
     if sel_brand != "All": h_df = h_df[h_df["Brand"] == sel_brand]
     if sel_cat != "All": h_df = h_df[h_df["Category"] == sel_cat]
