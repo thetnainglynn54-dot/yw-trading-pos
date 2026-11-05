@@ -2155,6 +2155,7 @@ if not df.empty:
 
         current_date = pd.to_datetime(row_data["Date"]).date()
         current_customer = str(row_data.get("Customer", "-"))
+        current_customer_id = str(row_data.get("Customer Type", "-"))
         current_payment = str(row_data.get("Payment", "Cash"))
         current_pq = float(row_data.get("Purchase Qty", 0) or 0)
         current_pp = float(row_data.get("Pur Price", 0) or 0)
@@ -2168,22 +2169,50 @@ if not df.empty:
         if current_payment not in payment_list:
             payment_list.insert(0, current_payment)
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         with col1:
             new_date = st.date_input("Date", value=current_date, key=f"edit_date_{target_idx}")
         with col2:
-            new_customer = st.selectbox(
-                "Customer",
-                options=customer_list,
-                index=customer_list.index(current_customer) if current_customer in customer_list else 0,
-                key=f"edit_customer_{target_idx}"
-            )
-        with col3:
             new_payment = st.selectbox(
                 "Payment",
                 options=payment_list,
                 index=payment_list.index(current_payment) if current_payment in payment_list else 0,
                 key=f"edit_payment_{target_idx}"
+            )
+
+        customer_col, customer_id_col = st.columns(2)
+        customer_key = f"edit_customer_{target_idx}"
+        customer_id_key = f"edit_customer_id_{target_idx}"
+
+        def reset_edit_customer_id():
+            st.session_state[customer_id_key] = "-"
+
+        with customer_col:
+            new_customer = st.selectbox(
+                "Customer",
+                options=customer_list,
+                index=customer_list.index(current_customer) if current_customer in customer_list else 0,
+                key=customer_key,
+                on_change=reset_edit_customer_id,
+            )
+
+        customer_id_rows = df[df["Customer"].astype(str) == str(new_customer)]
+        customer_id_options = sorted([
+            str(value) for value in customer_id_rows.get("Customer Type", pd.Series(dtype=str)).dropna().unique()
+            if str(value).strip() not in ["", "nan", "None"]
+        ])
+        if new_customer == current_customer and current_customer_id not in customer_id_options:
+            customer_id_options.append(current_customer_id)
+            customer_id_options = sorted(customer_id_options)
+        if "-" not in customer_id_options:
+            customer_id_options.insert(0, "-")
+
+        with customer_id_col:
+            new_customer_id = st.selectbox(
+                "CID",
+                options=customer_id_options,
+                index=customer_id_options.index(current_customer_id) if new_customer == current_customer and current_customer_id in customer_id_options else 0,
+                key=customer_id_key,
             )
 
         st.markdown("### Item Info")
@@ -2235,6 +2264,9 @@ if not df.empty:
 
                 all_df.loc[target_idx, "Date"] = as_sheet_value(new_date)
                 all_df.loc[target_idx, "Customer"] = new_customer
+                if "Customer Type" not in all_df.columns:
+                    all_df["Customer Type"] = "-"
+                all_df.loc[target_idx, "Customer Type"] = new_customer_id
                 all_df.loc[target_idx, "Payment"] = new_payment
                 all_df.loc[target_idx, "Purchase Qty"] = float(new_p_qty)
                 all_df.loc[target_idx, "Pur Price"] = float(new_p_price)
