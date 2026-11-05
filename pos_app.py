@@ -2135,7 +2135,7 @@ if not df.empty:
         hide_index=True,
         disabled=read_only_cols,
         column_config={
-            "Select": st.column_config.CheckboxColumn("Select", default=False),
+            "Select": st.column_config.CheckboxColumn("", default=False),
             "Customer Type": st.column_config.TextColumn("CID"),
             "Purchase Qty": st.column_config.NumberColumn("Pur Qty"),
             "Other Income": st.column_config.NumberColumn("Income"),
