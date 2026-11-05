@@ -1759,9 +1759,7 @@ with r1_c2:
     st.text_input("Transaction ID", key="transaction_id", disabled=True)
 
 with r1_c3:
-    pay_list = sorted([str(x) for x in df["Payment"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else ["Cash", "KPay", "Wave"]
-    p_sel = st.selectbox("Payment Method", ["Choose Payment"] + pay_list + add_new_options, key="pay_drop")
-    pay_type = st.text_input("New Payment Method", key="p_type_new") if p_sel == "+ Add New" else (p_sel if p_sel != "Choose Payment" else "Cash")
+    discount_value = st.number_input("Discount", min_value=0.0, step=1.0, key="discount")
 
 r2_c1, r2_c2, r2_c3 = st.columns([1, 1, 1])
 with r2_c1:
@@ -1796,7 +1794,9 @@ with r2_c2:
     customer_id = st.text_input("New CID", key="customer_id_new") if customer_id_sel == "+ Add New" else (customer_id_sel if customer_id_sel != "Choose CID" else "")
 
 with r2_c3:
-    discount_value = st.number_input("Discount", min_value=0.0, step=1.0, key="discount")
+    pay_list = sorted([str(x) for x in df["Payment"].unique() if str(x) not in ["-", "nan"]]) if not df.empty else ["Cash", "KPay", "Wave"]
+    p_sel = st.selectbox("Payment Method", ["Choose Payment"] + pay_list + add_new_options, key="pay_drop")
+    pay_type = st.text_input("New Payment Method", key="p_type_new") if p_sel == "+ Add New" else (p_sel if p_sel != "Choose Payment" else "Cash")
 
 f2, f3, f4 = st.columns(3)
 with f2:
