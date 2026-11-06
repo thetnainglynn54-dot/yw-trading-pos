@@ -1617,22 +1617,31 @@ st.components.v1.html("""
     const editor = doc.querySelector('[data-testid="stDataEditor"]');
     const anchor = doc.getElementById("yw-history-select-all-anchor");
     const markerContainer = anchor && anchor.closest("div.element-container");
-    if (!editor || !markerContainer) return;
+    if (!editor) return;
 
-    let checkboxContainer = markerContainer.nextElementSibling;
+    let checkboxContainer = markerContainer ? markerContainer.nextElementSibling : null;
     while (checkboxContainer && !checkboxContainer.querySelector('[data-testid="stCheckbox"]')) {
       checkboxContainer = checkboxContainer.nextElementSibling;
     }
-    const checkbox = checkboxContainer && checkboxContainer.querySelector('[data-testid="stCheckbox"]');
+    if (!checkboxContainer) {
+      const keyedWidget = doc.querySelector(".st-key-history_select_all");
+      checkboxContainer = keyedWidget && (keyedWidget.closest("div.element-container") || keyedWidget);
+    }
+    const checkbox = checkboxContainer && (
+      checkboxContainer.matches('[data-testid="stCheckbox"]')
+        ? checkboxContainer
+        : checkboxContainer.querySelector('[data-testid="stCheckbox"]')
+    );
     if (!checkboxContainer || !checkbox) return;
 
-    markerContainer.style.display = "none";
+    if (markerContainer) markerContainer.style.display = "none";
     checkboxContainer.style.position = "fixed";
     checkboxContainer.style.left = "-10000px";
     checkboxContainer.style.top = "-10000px";
     checkboxContainer.style.width = "36px";
     checkboxContainer.style.height = "34px";
-    const initialRect = editor.getBoundingClientRect();
+    const grid = editor.querySelector("canvas") || editor;
+    const initialRect = grid.getBoundingClientRect();
     if (!initialRect.width || !initialRect.height) {
       checkboxContainer.style.visibility = "hidden";
       return;
