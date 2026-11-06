@@ -1613,64 +1613,6 @@ st.components.v1.html("""
     }
   }
 
-  function positionHistorySelectAll() {
-    const editor = doc.querySelector('[data-testid="stDataEditor"]');
-    if (!editor) return;
-    const tableRow = editor.closest('[data-testid="stHorizontalBlock"]');
-    if (!tableRow) return;
-    const columns = Array.from(tableRow.querySelectorAll('[data-testid="column"]'));
-    const editorColumn = editor.closest('[data-testid="column"]');
-    const selectColumn = columns.find((column) => column !== editorColumn && column.querySelector('[data-testid="stCheckbox"]'));
-    const checkbox = selectColumn && selectColumn.querySelector('[data-testid="stCheckbox"]');
-    if (!editorColumn || !selectColumn || !checkbox) return;
-
-    tableRow.style.setProperty("flex-wrap", "nowrap", "important");
-    tableRow.style.setProperty("overflow", "visible", "important");
-    selectColumn.style.setProperty("width", "90px", "important");
-    selectColumn.style.setProperty("flex", "0 0 90px", "important");
-    selectColumn.style.setProperty("max-width", "90px", "important");
-    selectColumn.style.setProperty("display", "flex", "important");
-    selectColumn.style.setProperty("justify-content", "center", "important");
-    editorColumn.style.setProperty("width", "auto", "important");
-    editorColumn.style.setProperty("flex", "1 1 0%", "important");
-    editorColumn.style.setProperty("max-width", "none", "important");
-    editorColumn.style.setProperty("overflow", "visible", "important");
-
-    const delta = editorColumn.getBoundingClientRect().left - selectColumn.getBoundingClientRect().left;
-    editor.style.position = "relative";
-    editor.style.left = `${-delta}px`;
-    editor.style.width = `calc(100% + ${delta}px)`;
-    editor.style.maxWidth = "none";
-    editor.style.zIndex = "1";
-
-    selectColumn.style.position = "relative";
-    selectColumn.style.zIndex = "2";
-    const checkboxWrapper = checkbox.closest("div.element-container") || checkbox;
-    checkboxWrapper.style.width = "100%";
-    checkboxWrapper.style.height = "44px";
-    checkboxWrapper.style.minHeight = "44px";
-    checkboxWrapper.style.margin = "0";
-    checkboxWrapper.style.padding = "0";
-    checkboxWrapper.style.display = "flex";
-    checkboxWrapper.style.alignItems = "center";
-    checkboxWrapper.style.justifyContent = "center";
-    checkboxWrapper.style.background = "#f9fafb";
-    checkbox.style.width = "100%";
-    checkbox.style.height = "100%";
-    checkbox.style.display = "flex";
-    checkbox.style.alignItems = "center";
-    checkbox.style.justifyContent = "center";
-    checkbox.style.position = "relative";
-    checkbox.style.zIndex = "2";
-    const label = checkbox.querySelector("label");
-    if (label) {
-      label.style.width = "100%";
-      label.style.margin = "0";
-      label.style.display = "flex";
-      label.style.justifyContent = "center";
-    }
-  }
-
   function applyMode() {
     const isMobile = window.parent.matchMedia("(max-width: 640px)").matches;
     const nav = ensureNav();
@@ -1681,7 +1623,6 @@ st.components.v1.html("""
       setVisible(sectionElements(page), !isMobile || page === activePage);
     });
     applyPhoneFieldRows(isMobile);
-    positionHistorySelectAll();
   }
 
   installStyle();
@@ -2248,25 +2189,22 @@ if not df.empty:
         disabled=not has_permission("edit_history") or all_rows_selected,
     )
 
-    select_all_col, history_table_col = st.columns([1, 12], gap="small")
-    with select_all_col:
-        st.checkbox("", key="history_select_all", on_change=apply_history_select_all, disabled=display_df.empty)
-    with history_table_col:
-        edited_df = st.data_editor(
-            display_df,
-            use_container_width=True,
-            hide_index=True,
-            disabled=read_only_cols,
-            column_config={
-                "Select": st.column_config.CheckboxColumn("", default=selection_default, width="small"),
-                "Customer Type": st.column_config.TextColumn("CID"),
-                "Purchase Qty": st.column_config.NumberColumn("Pur Qty"),
-                "Other Income": st.column_config.NumberColumn("Income"),
-                "Original_Index": None # User á€€á€­á€¯ á€™á€•á€¼á€•á€«
-            },
-            key=t_key,
-            on_change=sync_history_select_all_from_rows,
-        )
+    st.checkbox("", key="history_select_all", on_change=apply_history_select_all, disabled=display_df.empty)
+    edited_df = st.data_editor(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+        disabled=read_only_cols,
+        column_config={
+            "Select": st.column_config.CheckboxColumn("", default=selection_default, width="small"),
+            "Customer Type": st.column_config.TextColumn("CID"),
+            "Purchase Qty": st.column_config.NumberColumn("Pur Qty"),
+            "Other Income": st.column_config.NumberColumn("Income"),
+            "Original_Index": None # User á€€á€­á€¯ á€™á€•á€¼á€•á€«
+        },
+        key=t_key,
+        on_change=sync_history_select_all_from_rows,
+    )
 
     # LL_1 >>> EDIT DIALOG (Cloud Version) -----
     @st.dialog("📝 Edit Transaction Record")
