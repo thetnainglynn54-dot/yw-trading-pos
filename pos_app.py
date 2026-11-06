@@ -1060,7 +1060,7 @@ def show_receipt_ui(customer_name, items_list, total_amount):
 # FF-1 >>> Sidebar (Fixing Logic & Cloud Version) -----
 st.sidebar.write("### ⚙️ Setting")
 if is_admin_user():
-    with st.sidebar.expander("Account Management", expanded=False):
+    with st.sidebar.expander("User Control", expanded=False):
         users = load_app_users()
         managed_users = {k: v for k, v in users.items() if k != "admin"}
         st.caption("Admin only")
@@ -2008,6 +2008,13 @@ if not df.empty:
     def reset_cid_history_filter():
         st.session_state["f_cid"] = "All"
 
+    def reset_history_brand_children():
+        st.session_state["f_cat"] = "All"
+        st.session_state["f_item"] = "All"
+
+    def reset_history_category_child():
+        st.session_state["f_item"] = "All"
+
     f1, f2, f3, f4, f5, f6 = st.columns(6)
     with f1: sel_cus = st.selectbox("Filter by Customer", ["All"] + sorted(df["Customer"].dropna().unique().tolist()), key="f_cus", on_change=reset_cid_history_filter)
     if "Customer Type" in df.columns:
@@ -2020,9 +2027,14 @@ if not df.empty:
         cid_options = []
     with f2: sel_cid = st.selectbox("Filter by CID", ["All"] + cid_options, key="f_cid")
     with f3: sel_pay = st.selectbox("Filter by Payment", ["All"] + sorted(df["Payment"].dropna().unique().tolist()), key="f_pay")
-    with f4: sel_brand = st.selectbox("Filter by Brand", ["All"] + sorted(df["Brand"].dropna().unique().tolist()), key="f_brand")
-    with f5: sel_cat = st.selectbox("Filter by Category", ["All"] + sorted(df["Category"].dropna().unique().tolist()), key="f_cat")
-    with f6: sel_item = st.selectbox("Filter by Item", ["All"] + sorted(df["Item"].dropna().unique().tolist()), key="f_item")
+    brand_options = sorted([str(value) for value in df["Brand"].dropna().unique()])
+    with f4: sel_brand = st.selectbox("Filter by Brand", ["All"] + brand_options, key="f_brand", on_change=reset_history_brand_children)
+    brand_source = df if sel_brand == "All" else df[df["Brand"].astype(str) == sel_brand]
+    category_options = sorted([str(value) for value in brand_source["Category"].dropna().unique()])
+    with f5: sel_cat = st.selectbox("Filter by Category", ["All"] + category_options, key="f_cat", on_change=reset_history_category_child)
+    item_source = brand_source if sel_cat == "All" else brand_source[brand_source["Category"].astype(str) == sel_cat]
+    item_options = sorted([str(value) for value in item_source["Item"].dropna().unique()])
+    with f6: sel_item = st.selectbox("Filter by Item", ["All"] + item_options, key="f_item")
 
     # Date Range á€”á€¾á€„á€·á€º á€á€œá€¯á€á€ºá€™á€»á€¬á€¸
     with st.container(border=True):
