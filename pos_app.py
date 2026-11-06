@@ -1613,6 +1613,54 @@ st.components.v1.html("""
     }
   }
 
+  function positionHistorySelectAll() {
+    const editor = doc.querySelector('[data-testid="stDataEditor"]');
+    const checkbox = doc.querySelector('.st-key-history_select_all');
+    if (!editor || !checkbox) return;
+
+    const initialRect = editor.getBoundingClientRect();
+    if (!initialRect.width || !initialRect.height) {
+      checkbox.style.visibility = "hidden";
+      return;
+    }
+
+    const layoutRow = checkbox.closest('[data-testid="stHorizontalBlock"]');
+    if (layoutRow) {
+      layoutRow.style.height = "0";
+      layoutRow.style.minHeight = "0";
+      layoutRow.style.margin = "0";
+      layoutRow.style.padding = "0";
+      layoutRow.style.overflow = "visible";
+    }
+
+    const rect = editor.getBoundingClientRect();
+
+    checkbox.style.position = "fixed";
+    checkbox.style.left = `${rect.left + 29}px`;
+    checkbox.style.top = `${rect.top + 5}px`;
+    checkbox.style.width = "34px";
+    checkbox.style.height = "34px";
+    checkbox.style.margin = "0";
+    checkbox.style.padding = "0";
+    checkbox.style.zIndex = "2147483646";
+    checkbox.style.display = "flex";
+    checkbox.style.alignItems = "center";
+    checkbox.style.justifyContent = "center";
+    checkbox.style.background = "transparent";
+    checkbox.style.visibility = "visible";
+
+    const label = checkbox.querySelector("label");
+    if (label) {
+      label.style.width = "100%";
+      label.style.height = "100%";
+      label.style.margin = "0";
+      label.style.display = "flex";
+      label.style.alignItems = "center";
+      label.style.justifyContent = "center";
+    }
+
+  }
+
   function applyMode() {
     const isMobile = window.parent.matchMedia("(max-width: 640px)").matches;
     const nav = ensureNav();
@@ -1623,15 +1671,18 @@ st.components.v1.html("""
       setVisible(sectionElements(page), !isMobile || page === activePage);
     });
     applyPhoneFieldRows(isMobile);
+    positionHistorySelectAll();
   }
 
   installStyle();
   ensureNav();
   applyMode();
   window.parent.addEventListener("resize", applyMode);
+  window.parent.addEventListener("scroll", positionHistorySelectAll, true);
   setTimeout(applyMode, 500);
   setTimeout(applyMode, 1500);
   setTimeout(applyMode, 3000);
+  setTimeout(positionHistorySelectAll, 800);
   const observer = new MutationObserver(() => {
     window.clearTimeout(window.ywPhoneLayoutTimer);
     window.ywPhoneLayoutTimer = window.setTimeout(applyMode, 120);
