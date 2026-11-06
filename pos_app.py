@@ -2189,7 +2189,9 @@ if not df.empty:
         disabled=not has_permission("edit_history") or all_rows_selected,
     )
 
-    st.checkbox("", key="history_select_all", on_change=apply_history_select_all, disabled=display_df.empty)
+    select_all_col, _ = st.columns([0.065, 0.935], gap="small")
+    with select_all_col:
+        st.checkbox("", key="history_select_all", on_change=apply_history_select_all, disabled=display_df.empty)
     edited_df = st.data_editor(
         display_df,
         use_container_width=True,
