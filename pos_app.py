@@ -1615,39 +1615,50 @@ st.components.v1.html("""
 
   function positionHistorySelectAll() {
     const editor = doc.querySelector('[data-testid="stDataEditor"]');
-    const checkbox = doc.querySelector('.st-key-history_select_all');
-    if (!editor || !checkbox) return;
+    const anchor = doc.getElementById("yw-history-select-all-anchor");
+    const markerContainer = anchor && anchor.closest("div.element-container");
+    if (!editor || !markerContainer) return;
 
+    let checkboxContainer = markerContainer.nextElementSibling;
+    while (checkboxContainer && !checkboxContainer.querySelector('[data-testid="stCheckbox"]')) {
+      checkboxContainer = checkboxContainer.nextElementSibling;
+    }
+    const checkbox = checkboxContainer && checkboxContainer.querySelector('[data-testid="stCheckbox"]');
+    if (!checkboxContainer || !checkbox) return;
+
+    markerContainer.style.display = "none";
+    checkboxContainer.style.position = "fixed";
+    checkboxContainer.style.left = "-10000px";
+    checkboxContainer.style.top = "-10000px";
+    checkboxContainer.style.width = "36px";
+    checkboxContainer.style.height = "34px";
     const initialRect = editor.getBoundingClientRect();
     if (!initialRect.width || !initialRect.height) {
-      checkbox.style.visibility = "hidden";
+      checkboxContainer.style.visibility = "hidden";
       return;
     }
 
-    const layoutRow = checkbox.closest('[data-testid="stHorizontalBlock"]');
-    if (layoutRow) {
-      layoutRow.style.height = "0";
-      layoutRow.style.minHeight = "0";
-      layoutRow.style.margin = "0";
-      layoutRow.style.padding = "0";
-      layoutRow.style.overflow = "visible";
-    }
+    checkboxContainer.style.position = "fixed";
+    checkboxContainer.style.left = `${initialRect.left + 28}px`;
+    checkboxContainer.style.top = `${initialRect.top + 5}px`;
+    checkboxContainer.style.width = "36px";
+    checkboxContainer.style.height = "34px";
+    checkboxContainer.style.minHeight = "34px";
+    checkboxContainer.style.margin = "0";
+    checkboxContainer.style.padding = "0";
+    checkboxContainer.style.zIndex = "2147483646";
+    checkboxContainer.style.display = "flex";
+    checkboxContainer.style.alignItems = "center";
+    checkboxContainer.style.justifyContent = "center";
+    checkboxContainer.style.background = "#f9fafb";
+    checkboxContainer.style.visibility = "visible";
 
-    const rect = editor.getBoundingClientRect();
-
-    checkbox.style.position = "fixed";
-    checkbox.style.left = `${rect.left + 29}px`;
-    checkbox.style.top = `${rect.top + 5}px`;
-    checkbox.style.width = "34px";
-    checkbox.style.height = "34px";
-    checkbox.style.margin = "0";
-    checkbox.style.padding = "0";
-    checkbox.style.zIndex = "2147483646";
+    checkbox.style.width = "100%";
+    checkbox.style.height = "100%";
     checkbox.style.display = "flex";
     checkbox.style.alignItems = "center";
     checkbox.style.justifyContent = "center";
-    checkbox.style.background = "transparent";
-    checkbox.style.visibility = "visible";
+    checkbox.style.background = "#f9fafb";
 
     const label = checkbox.querySelector("label");
     if (label) {
@@ -1658,7 +1669,6 @@ st.components.v1.html("""
       label.style.alignItems = "center";
       label.style.justifyContent = "center";
     }
-
   }
 
   function applyMode() {
@@ -2239,9 +2249,8 @@ if not df.empty:
         disabled=not has_permission("edit_history") or all_rows_selected,
     )
 
-    select_all_col, _ = st.columns([0.06, 0.94])
-    with select_all_col:
-        st.checkbox("", key="history_select_all", on_change=apply_history_select_all, disabled=display_df.empty)
+    st.markdown('<div id="yw-history-select-all-anchor"></div>', unsafe_allow_html=True)
+    st.checkbox("", key="history_select_all", on_change=apply_history_select_all, disabled=display_df.empty)
 
     edited_df = st.data_editor(
         display_df,
