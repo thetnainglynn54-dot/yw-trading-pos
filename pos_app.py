@@ -1632,7 +1632,6 @@ st.components.v1.html("""
   setTimeout(applyMode, 500);
   setTimeout(applyMode, 1500);
   setTimeout(applyMode, 3000);
-  setTimeout(positionHistorySelectAll, 800);
   const observer = new MutationObserver(() => {
     window.clearTimeout(window.ywPhoneLayoutTimer);
     window.ywPhoneLayoutTimer = window.setTimeout(applyMode, 120);
@@ -2047,7 +2046,7 @@ if not df.empty:
         history_search = h_col3.button("🔍 Search", use_container_width=True, type="primary")    
 
         h_col4.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        edit_btn_slot = h_col4.empty()
+        edit_btn = h_col4.button("📝 Edit", use_container_width=True, type="secondary", disabled=not has_permission("edit_history"))
 
         h_col5.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
         print_btn = h_col5.button("🖨 Print", use_container_width=True, type="primary", disabled=not has_permission("print_history"))
@@ -2138,74 +2137,23 @@ if not df.empty:
         display_cols.remove("Transaction ID")
         display_cols.insert(display_cols.index("Expense") + 1, "Transaction ID")
         display_df = display_df[display_cols]
-
-    selection_signature = tuple(display_df["Original_Index"].tolist())
-    if st.session_state.get("history_selection_signature") != selection_signature:
-        st.session_state["table_key"] = st.session_state.get("table_key", 0) + 1
-        st.session_state["history_selection_signature"] = selection_signature
-        st.session_state["history_selection_default"] = False
-        st.session_state["history_all_selected"] = False
-
-    selection_default = bool(st.session_state.get("history_selection_default", False))
-    display_df.insert(0, "Select", selection_default)
+    display_df.insert(0, "Select", False)
     read_only_cols = [col for col in display_df.columns if col != "Select"]
 
     t_key = f"hist_table_{st.session_state.get('table_key', 0)}"
-
-    def history_selection_state(table_key, row_count, default_value):
-        editor_state = st.session_state.get(table_key, {})
-        edited_rows = editor_state.get("edited_rows", {}) if isinstance(editor_state, dict) else {}
-        selected_values = []
-        for row_idx in range(row_count):
-            changes = edited_rows.get(str(row_idx), edited_rows.get(row_idx, {}))
-            selected_values.append(bool(changes.get("Select", default_value)) if isinstance(changes, dict) else default_value)
-        all_selected = bool(row_count > 0 and all(selected_values))
-        return all_selected
-
-    def apply_history_select_all():
-        select_all_value = bool(st.session_state.get("history_select_all", False))
-        st.session_state["history_selection_default"] = select_all_value
-        st.session_state["history_all_selected"] = bool(select_all_value and len(display_df) > 0)
-        st.session_state["table_key"] = st.session_state.get("table_key", 0) + 1
-
-    def sync_history_select_all_from_rows():
-        active_key = st.session_state.get("history_active_table_key", t_key)
-        row_count = st.session_state.get("history_visible_row_count", 0)
-        default_value = bool(st.session_state.get("history_selection_default", False))
-        all_selected = history_selection_state(active_key, row_count, default_value)
-        st.session_state["history_all_selected"] = all_selected
-        st.session_state["history_select_all"] = all_selected
-
-    all_rows_selected = history_selection_state(t_key, len(display_df), selection_default)
-    st.session_state["history_active_table_key"] = t_key
-    st.session_state["history_visible_row_count"] = len(display_df)
-    st.session_state["history_all_selected"] = all_rows_selected
-    st.session_state["history_select_all"] = all_rows_selected
-
-    edit_btn = edit_btn_slot.button(
-        "📝 Edit",
-        use_container_width=True,
-        type="secondary",
-        disabled=not has_permission("edit_history") or all_rows_selected,
-    )
-
-    select_all_col, _ = st.columns([0.065, 0.935], gap="small")
-    with select_all_col:
-        st.checkbox("", key="history_select_all", on_change=apply_history_select_all, disabled=display_df.empty)
     edited_df = st.data_editor(
         display_df,
         use_container_width=True,
         hide_index=True,
         disabled=read_only_cols,
         column_config={
-            "Select": st.column_config.CheckboxColumn("", default=selection_default, width="small"),
+            "Select": st.column_config.CheckboxColumn("", default=False),
             "Customer Type": st.column_config.TextColumn("CID"),
             "Purchase Qty": st.column_config.NumberColumn("Pur Qty"),
             "Other Income": st.column_config.NumberColumn("Income"),
             "Original_Index": None # User á€€á€­á€¯ á€™á€•á€¼á€•á€«
         },
-        key=t_key,
-        on_change=sync_history_select_all_from_rows,
+        key=t_key
     )
 
     # LL_1 >>> EDIT DIALOG (Cloud Version) -----
@@ -2343,9 +2291,6 @@ if not df.empty:
 
                 st.success("Transaction Updated Successfully")
                 st.session_state.table_key = st.session_state.get("table_key", 0) + 1
-                st.session_state["history_selection_default"] = False
-                st.session_state["history_all_selected"] = False
-                st.session_state["history_select_all"] = False
                 st.rerun()
             except Exception as e:
                 st.error(f"Update Error: {e}")
