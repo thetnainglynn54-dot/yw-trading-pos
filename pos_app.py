@@ -2234,7 +2234,9 @@ if not df.empty:
             ),
             "Customer Type": st.column_config.TextColumn("CID"),
             "Purchase Qty": st.column_config.NumberColumn("Pur Qty"),
-            "Other Income": st.column_config.NumberColumn("Income"),
+            "Discount": st.column_config.NumberColumn("Discount", format="%.0f"),
+            "Expense": st.column_config.NumberColumn("Expense", format="%.0f"),
+            "Other Income": st.column_config.NumberColumn("Income", format="%.0f"),
             "Original_Index": None # User á€€á€­á€¯ á€™á€•á€¼á€•á€«
         },
         key=t_key,
