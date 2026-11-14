@@ -2041,12 +2041,28 @@ if not df.empty:
         h_col1, h_col2, h_col3, h_col4, h_col5, h_col6 = st.columns([1, 1, 1, 1, 1, 1])
         h_start = h_col1.date_input("Start Date", value=date.today(), key="h_start_val")
         h_end = h_col2.date_input("End Date", value=date.today(), key="h_end_val")
+
+        # Start a fresh selection whenever the visible history records change.
+        history_selection_scope = (
+            str(h_start), str(h_end), str(sel_cus), str(sel_cid), str(sel_pay),
+            str(sel_brand), str(sel_cat), str(sel_item),
+        )
+        if st.session_state.get("history_selection_scope") != history_selection_scope:
+            st.session_state["history_selection_scope"] = history_selection_scope
+            st.session_state["history_select_all"] = False
+            st.session_state["history_selected_rows"] = {}
+            st.session_state["table_key"] = st.session_state.get("table_key", 0) + 1
+
+        edit_disabled = (
+            not has_permission("edit_history")
+            or st.session_state.get("history_select_all", False)
+        )
     
         h_col3.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
         history_search = h_col3.button("🔍 Search", use_container_width=True, type="primary")    
 
         h_col4.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        edit_btn = h_col4.button("📝 Edit", use_container_width=True, type="secondary", disabled=not has_permission("edit_history"))
+        edit_btn = h_col4.button("📝 Edit", use_container_width=True, type="secondary", disabled=edit_disabled)
 
         h_col5.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
         print_btn = h_col5.button("🖨 Print", use_container_width=True, type="primary", disabled=not has_permission("print_history"))
@@ -2137,23 +2153,83 @@ if not df.empty:
         display_cols.remove("Transaction ID")
         display_cols.insert(display_cols.index("Expense") + 1, "Transaction ID")
         display_df = display_df[display_cols]
-    display_df.insert(0, "Select", False)
+    selected_by_record = st.session_state.get("history_selected_rows", {})
+    display_df.insert(
+        0,
+        "Select",
+        [bool(selected_by_record.get(str(record_id), False)) for record_id in display_df["Original_Index"]],
+    )
     read_only_cols = [col for col in display_df.columns if col != "Select"]
 
     t_key = f"hist_table_{st.session_state.get('table_key', 0)}"
+
+    def apply_history_select_all():
+        selected = bool(st.session_state.get("history_select_all", False))
+        st.session_state["history_selected_rows"] = {
+            str(record_id): selected for record_id in display_df["Original_Index"]
+        }
+        st.session_state["table_key"] = st.session_state.get("table_key", 0) + 1
+
+    def save_history_row_selection():
+        selected_by_record = dict(st.session_state.get("history_selected_rows", {}))
+        current_editor_state = st.session_state.get(t_key, {})
+        for row_position, changes in current_editor_state.get("edited_rows", {}).items():
+            if isinstance(changes, dict) and "Select" in changes:
+                try:
+                    row_position = int(row_position)
+                    if 0 <= row_position < len(display_df):
+                        record_id = str(display_df.iloc[row_position]["Original_Index"])
+                        selected_by_record[record_id] = bool(changes["Select"])
+                except (TypeError, ValueError):
+                    pass
+
+        st.session_state["history_selected_rows"] = selected_by_record
+        current_flags = [
+            bool(selected_by_record.get(str(record_id), False))
+            for record_id in display_df["Original_Index"]
+        ]
+        st.session_state["history_select_all"] = bool(current_flags) and all(current_flags)
+        st.session_state["table_key"] = st.session_state.get("table_key", 0) + 1
+
+
+    # Place Select All above the table, centered approximately over its first column.
+    select_all_col, _ = st.columns([0.075, 0.925], gap="small")
+    select_all_left, select_all_center, select_all_right = select_all_col.columns([1, 1, 1], gap="small")
+    with select_all_center:
+        st.checkbox(
+            "",
+            key="history_select_all",
+            label_visibility="collapsed",
+            on_change=apply_history_select_all,
+            disabled=display_df.empty,
+        )
+
+    # Highlight selected rows in the same run that renders their checkbox state.
+    selected_flags = display_df["Select"].astype(bool).tolist()
+    styled_display_df = display_df.style.apply(
+        lambda row: [
+            "background-color: #fff0f0;" if selected_flags[row.name] else ""
+            for _ in row
+        ],
+        axis=1,
+    )
+
     edited_df = st.data_editor(
-        display_df,
+        styled_display_df,
         use_container_width=True,
         hide_index=True,
         disabled=read_only_cols,
         column_config={
-            "Select": st.column_config.CheckboxColumn("", default=False),
+            "Select": st.column_config.CheckboxColumn(
+                "", width="small", default=False
+            ),
             "Customer Type": st.column_config.TextColumn("CID"),
             "Purchase Qty": st.column_config.NumberColumn("Pur Qty"),
             "Other Income": st.column_config.NumberColumn("Income"),
             "Original_Index": None # User á€€á€­á€¯ á€™á€•á€¼á€•á€«
         },
-        key=t_key
+        key=t_key,
+        on_change=save_history_row_selection,
     )
 
     # LL_1 >>> EDIT DIALOG (Cloud Version) -----
