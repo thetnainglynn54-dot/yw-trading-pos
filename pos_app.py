@@ -2258,6 +2258,10 @@ if not df.empty:
         current_pp = float(row_data.get("Pur Price", 0) or 0)
         current_sq = float(row_data.get("Sale Qty", 0) or 0)
         current_sp = float(row_data.get("Sale Price", 0) or 0)
+        current_other_income = pd.to_numeric(row_data.get("Other Income", 0), errors="coerce")
+        current_expense = pd.to_numeric(row_data.get("Expense", 0), errors="coerce")
+        current_other_income = 0.0 if pd.isna(current_other_income) else float(current_other_income)
+        current_expense = 0.0 if pd.isna(current_expense) else float(current_expense)
 
         customer_list = sorted([str(x) for x in df["Customer"].dropna().unique().tolist()])
         payment_list = sorted([str(x) for x in df["Payment"].dropna().unique().tolist()])
@@ -2338,6 +2342,13 @@ if not df.empty:
                 step=1.0,
                 key=f"edit_pp_{target_idx}"
             )
+            new_other_income = st.number_input(
+                "Other Income",
+                min_value=0.0,
+                value=current_other_income,
+                step=1.0,
+                key=f"edit_other_income_{target_idx}"
+            )
         with q2:
             new_s_qty = st.number_input(
                 "Sale Qty",
@@ -2352,6 +2363,13 @@ if not df.empty:
                 value=current_sp,
                 step=1.0,
                 key=f"edit_sp_{target_idx}"
+            )
+            new_expense = st.number_input(
+                "Expense",
+                min_value=0.0,
+                value=current_expense,
+                step=1.0,
+                key=f"edit_expense_{target_idx}"
             )
 
         st.markdown("---")
@@ -2369,6 +2387,8 @@ if not df.empty:
                 all_df.loc[target_idx, "Pur Price"] = float(new_p_price)
                 all_df.loc[target_idx, "Sale Qty"] = float(new_s_qty)
                 all_df.loc[target_idx, "Sale Price"] = float(new_s_price)
+                all_df.loc[target_idx, "Other Income"] = float(new_other_income)
+                all_df.loc[target_idx, "Expense"] = float(new_expense)
 
                 all_df = recalculate_items_in_df(all_df, [target_product_key])
                 conn.update(data=all_df)
