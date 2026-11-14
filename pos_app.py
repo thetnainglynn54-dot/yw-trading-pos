@@ -2154,10 +2154,14 @@ if not df.empty:
         display_cols.insert(display_cols.index("Expense") + 1, "Transaction ID")
         display_df = display_df[display_cols]
     selected_by_record = st.session_state.get("history_selected_rows", {})
+    select_values = [
+        bool(selected_by_record.get(str(record_id), False))
+        for record_id in display_df["Original_Index"]
+    ]
     display_df.insert(
         0,
         "Select",
-        [bool(selected_by_record.get(str(record_id), False)) for record_id in display_df["Original_Index"]],
+        pd.Series(select_values, index=display_df.index, dtype=bool),
     )
     read_only_cols = [col for col in display_df.columns if col != "Select"]
 
@@ -2204,15 +2208,20 @@ if not df.empty:
             disabled=display_df.empty,
         )
 
-    # Highlight selected rows in the same run that renders their checkbox state.
-    selected_flags = display_df["Select"].astype(bool).tolist()
-    styled_display_df = display_df.style.apply(
-        lambda row: [
-            "background-color: #fff0f0;" if selected_flags[row.name] else ""
-            for _ in row
-        ],
-        axis=1,
-    )
+    # Style only the read-only cells. Streamlit's editor does not apply Styler
+    # formatting to editable columns, and an empty history needs no Styler.
+    if display_df.empty:
+        styled_display_df = display_df
+    else:
+        selected_flags = display_df["Select"].astype(bool).tolist()
+        styled_display_df = display_df.style.apply(
+            lambda row: [
+                "background-color: #fff0f0;" if selected_flags[row.name] else ""
+                for _ in row
+            ],
+            axis=1,
+            subset=read_only_cols,
+        )
 
     edited_df = st.data_editor(
         styled_display_df,
