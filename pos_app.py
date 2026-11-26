@@ -20,6 +20,25 @@ def myanmar_today():
     return myanmar_now().date()
 
 
+def popup_success(message, after_rerun=False):
+    if after_rerun:
+        st.session_state["pending_success_popup"] = str(message)
+        return
+    st.toast(str(message), icon="✅")
+
+
+def popup_error(message):
+    st.toast(str(message), icon="❌")
+
+
+def popup_warning(message):
+    st.toast(str(message), icon="⚠️")
+
+
+def popup_info(message):
+    st.toast(str(message), icon="ℹ️")
+
+
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 EXPECTED_COLS = ["Date", "Customer", "Payment", "Brand", "Category", "Item",
@@ -197,7 +216,7 @@ def has_permission(permission):
 def require_permission(permission):
     if has_permission(permission):
         return True
-    st.warning("You do not have permission for this action.")
+    popup_warning("You do not have permission for this action.")
     return False
 
 
@@ -402,7 +421,7 @@ def load_data():
         
         return pd.DataFrame()
     except Exception as e:
-        st.error(f"Error loading data from Google Sheets: {e}")
+        popup_error(f"Error loading data from Google Sheets: {e}")
         return pd.DataFrame()
 
 
@@ -715,12 +734,12 @@ if not st.session_state.logged_in:
                         st.session_state["current_role"] = auth_user["role"]
                         st.session_state["user_permissions"] = auth_user["permissions"]
                         
-                        st.success("Login Success")
+                        popup_success("Login successful.")
                         st.rerun()
                     else:
-                        st.error("Wrong Password")
+                        popup_error("Incorrect password.")
                 else:
-                    st.warning("⚠️ Password must be 6 digits (0-9) only")
+                    popup_warning("Password must contain exactly 6 digits.")
     st.stop()
 
 
@@ -756,18 +775,18 @@ def rebuild_all_stock():
     all_df = conn.read(ttl=60)
     
     if all_df is None or all_df.empty:
-        st.warning("No data found to rebuild.")
+        popup_warning("No data found to rebuild.")
         return
 
     required_cols = ["Brand", "Category", "Item", "Before Amt", "Purchase Qty", "Pur Price", "Sale Qty", "Stock", "Balance"]
     missing_cols = [col for col in required_cols if col not in all_df.columns]
     if missing_cols:
-        st.error(f"Missing columns: {', '.join(missing_cols)}")
+        popup_error(f"Missing columns: {', '.join(missing_cols)}")
         return
 
     items = unique_product_keys(all_df)
     if not items:
-        st.warning("No item rows found to rebuild.")
+        popup_warning("No item rows found to rebuild.")
         return
 
     progress_bar = st.progress(0.0)
@@ -778,7 +797,7 @@ def rebuild_all_stock():
     conn.update(data=all_df)
     clear_data_cache()
     
-    st.success("✅ Stock အားလုံးကို အောင်မြင်စွာ ပြန်လည်တွက်ချက်ပြီးပါပြီ။")
+    popup_success("All stock values were rebuilt successfully.")
 
 
 # DD_1 >>> Google Sheets á€™á€¾ Data á€€á€­á€¯ DataFrame á€¡á€–á€¼á€…á€º á€–á€á€ºá€šá€°á€á€¼á€„á€ºá€¸ -----
@@ -822,7 +841,7 @@ def load_data():
             return pd.DataFrame(columns=EXPECTED_COLS)
 
     except Exception as e:
-        st.error(f"❌ Data Loading Error: {e}")
+        popup_error(f"Data loading error: {e}")
         # Error á€á€€á€ºá€œá€»á€¾á€„á€ºá€œá€Šá€ºá€¸ structure á€™á€•á€»á€€á€ºá€¡á€±á€¬á€„á€º column á€¡á€œá€½á€á€ºá€™á€»á€¬á€¸ á€•á€¼á€”á€ºá€•á€±á€¸á€•á€«
         return pd.DataFrame(columns=EXPECTED_COLS)
 
@@ -961,6 +980,10 @@ if "show_values" not in st.session_state:
 # init_db() á€€á€­á€¯ á€¡á€•á€±á€«á€ºá€€ CC_1 á€™á€¾á€¬ pass á€œá€¯á€•á€ºá€‘á€¬á€¸á€á€²á€·á€á€²á€·á€¡á€á€½á€€á€º error á€™á€á€€á€ºá€˜á€² á€€á€»á€±á€¬á€ºá€žá€½á€¬á€¸á€•á€«á€œá€­á€™á€·á€ºá€™á€šá€º
 init_db()
 
+pending_success_popup = st.session_state.pop("pending_success_popup", None)
+if pending_success_popup:
+    popup_success(pending_success_popup)
+
 df = load_data()
 
 # Reset Logic (á€…á€¬á€›á€„á€ºá€¸á€žá€½á€„á€ºá€¸á€•á€¼á€®á€¸á€•á€«á€€ Input Box á€™á€»á€¬á€¸ á€•á€¼á€”á€ºá€›á€¾á€„á€ºá€¸á€›á€”á€º) -----
@@ -1095,13 +1118,13 @@ if is_admin_user():
         if st.button("Create Account", use_container_width=True, type="primary", key=f"acct_create_{acct_create_reset_key}"):
             clean_username = new_username.strip()
             if not clean_username:
-                st.warning("Enter username")
+                popup_warning("Enter a username.")
             elif clean_username == "admin":
-                st.error("admin account already exists")
+                popup_error("The admin account already exists.")
             elif clean_username in users:
-                st.error("Username already exists")
+                popup_error("That username already exists.")
             elif len(new_password) != 6 or not new_password.isdigit():
-                st.warning("Password must be 6 digits")
+                popup_warning("Password must contain exactly 6 digits.")
             else:
                 users[clean_username] = {
                     **new_password_record(new_password),
@@ -1110,7 +1133,7 @@ if is_admin_user():
                     "role": "user",
                 }
                 save_app_users(users)
-                st.success(f"Created account: {clean_username}")
+                popup_success(f"Account created: {clean_username}")
                 st.session_state.acct_create_reset_key = acct_create_reset_key + 1
                 st.rerun()
 
@@ -1132,23 +1155,23 @@ if is_admin_user():
             reset_password = st.text_input("New password (optional, 6 digits)", type="password", key=f"acct_reset_pw_{manage_user}")
             if st.button("Save Account Changes", use_container_width=True, type="primary", key=f"acct_save_{manage_user}"):
                 if reset_password and (len(reset_password) != 6 or not reset_password.isdigit()):
-                    st.warning("New password must be 6 digits")
+                    popup_warning("The new password must contain exactly 6 digits.")
                 else:
                     users[manage_user]["active"] = is_active
                     users[manage_user]["permissions"] = updated_permissions
                     if reset_password:
                         users[manage_user].update(new_password_record(reset_password))
                     save_app_users(users)
-                    st.success("Account updated")
+                    popup_success("Account updated.")
                     st.rerun()
 
             if st.button("Delete Account", use_container_width=True, type="secondary", key=f"acct_delete_{manage_user}"):
                 users.pop(manage_user, None)
                 save_app_users(users)
-                st.success("Account deleted")
+                popup_success("Account deleted.")
                 st.rerun()
         else:
-            st.info("No user accounts yet.")
+            popup_info("No user accounts are available.")
 
 if not df.empty and has_permission("edit_names"):
     with st.sidebar.expander("Edit Names", expanded=False):
@@ -1211,15 +1234,15 @@ if not df.empty and has_permission("edit_names"):
                         conn.update(data=all_df)
                         clear_data_cache()
                         
-                        st.success(f"✅ Updated {edit_label} to '{new_val}'!")
+                        popup_success(f"Updated {edit_label} to '{new_val}'.")
                         st.session_state.edit_names_reset_key = edit_reset_key + 1
                         st.session_state.reset_trigger = True
                         st.rerun()
                         
                     except Exception as e:
-                        st.error(f"❌ Error: {e}")
+                        popup_error(f"Update error: {e}")
                 else:
-                    st.warning("⚠️ နာမည်အသစ် ရိုက်ထည့်ပေးပါ။")
+                    popup_warning("Enter a new name.")
 
 # FF_3 >>> Cloud Security Section (Using Secrets Note) -----
 with st.sidebar:
@@ -1232,11 +1255,11 @@ with st.sidebar:
 
         if st.button("Change Password", use_container_width=True, type="primary", key="change_admin_password"):
             if old_pw != current_pw:
-                st.error("Wrong current password")
+                popup_error("The current password is incorrect.")
             elif len(new_pw) != 6 or not new_pw.isdigit():
-                st.warning("Password must be 6 digits")
+                popup_warning("Password must contain exactly 6 digits.")
             elif new_pw != confirm_pw:
-                st.error("New passwords do not match")
+                popup_error("The new passwords do not match.")
             else:
                 try:
                     if current_account == "admin":
@@ -1244,9 +1267,9 @@ with st.sidebar:
                     else:
                         update_current_user_password(current_account, new_pw)
                     st.session_state["password"] = new_pw
-                    st.success("Password changed successfully")
+                    popup_success("Password changed successfully.")
                 except Exception as e:
-                    st.error(f"Password update error: {e}")
+                    popup_error(f"Password update error: {e}")
 
 # FF_4 >>> Emergency Stock Repair -----
 with st.sidebar:
@@ -1281,23 +1304,23 @@ with st.sidebar:
                         clear_data_cache()
                         for key in ["rebuild_brand", "rebuild_category", "rebuild_item"]:
                             st.session_state.pop(key, None)
-                        st.success(f"✅ Rebuilt {rb_item}")
+                        popup_success(f"Rebuilt stock for {rb_item}.")
                         st.rerun()
                     else:
-                        st.warning("Select brand, category and item.")
+                        popup_warning("Select a brand, category, and item.")
 
             if st.button("Rebuild All Stocks", use_container_width=True):
-                with st.spinner("🔄 စာရင်းအားလုံးကို ပြန်လည်တွက်ချက်နေပါသည်..."):
+                with st.spinner("Rebuilding all stock values..."):
                     rebuild_all_stock()
                 for key in ["rebuild_brand", "rebuild_category", "rebuild_item"]:
                     st.session_state.pop(key, None)
-                st.success("All stock rebuilt successfully.")
+                popup_success("All stock values were rebuilt successfully.")
                 st.rerun()
 
     if has_permission("stock_reports"):
         with st.expander("Stock Reports", expanded=False):
             if df.empty:
-                st.info("No stock data available.")
+                popup_info("No stock data is available.")
             else:
                 report_type = st.selectbox(
                     "Report Type",
@@ -1351,9 +1374,9 @@ with st.sidebar:
                     st.session_state["stock_report_filename_date"] = filename_date
                     st.session_state["show_stock_report_preview"] = True
                     if report_df.empty:
-                        st.warning("No stock rows found for this report.")
+                        popup_warning("No stock rows were found for this report.")
                     else:
-                        st.success(f"Report ready: {len(report_df)} items")
+                        popup_success(f"Report ready: {len(report_df)} items.")
                         st.rerun()
 
                 report_df = st.session_state.get("stock_report_df", pd.DataFrame())
@@ -1865,9 +1888,9 @@ if f_item and f_item not in ["Choose Item", "+ Add New", ""]:
 # UI á€•á€±á€«á€ºá€á€½á€„á€º á€œá€€á€ºá€›á€¾á€­ Stock á€•á€¼á€žá€á€¼á€„á€ºá€¸
 if f_item and f_item not in ["Choose Item", "+ Add New", ""]:
     if l_stock <= 0:
-        st.error(f"❌ Current Stock for **{f_item}** : **{l_stock:,.0f}** (Out of Stock)")
+        popup_error(f"{f_item} is out of stock. Current stock: {l_stock:,.0f} units.")
     else:
-        st.info(f"💡 Current Stock for **{f_item}** : **{l_stock:,.0f}** units")
+        popup_info(f"Current stock for {f_item}: {l_stock:,.0f} units.")
 
 # á€¡á€œá€­á€¯á€¡á€œá€»á€±á€¬á€€á€º á€ˆá€±á€¸á€”á€¾á€¯á€”á€ºá€¸á€–á€¼á€Šá€·á€ºá€•á€±á€¸á€™á€Šá€·á€º Logic
 def update_input_fields():
@@ -1951,18 +1974,18 @@ if st.button("Save Transaction", use_container_width=True, type="primary"):
         st.stop()
     # áá‹ á€¡á€›á€±á€¬á€„á€ºá€¸á€žá€½á€„á€ºá€¸á€œá€»á€¾á€„á€º Stock á€›á€¾á€­á€™á€›á€¾á€­ á€¡á€›á€„á€ºá€…á€…á€ºá€™á€Šá€º
     if s_qty > 0 and l_stock < s_qty:
-        st.error(f"❌ လက်ကျန် Stock ({l_stock:,.0f}) ထက် ပိုရောင်း၍ မရပါ။")
+        popup_error(f"Cannot sell more than the available stock ({l_stock:,.0f} units).")
         st.stop()
 
     # á‚á‹ á€¡á€”á€¾á€¯á€á€ºá€‚á€á€”á€ºá€¸á€™á€»á€¬á€¸ á€™á€á€„á€ºá€¡á€±á€¬á€„á€º á€€á€¬á€€á€½á€šá€ºá€á€¼á€„á€ºá€¸
     if p_qty < 0 or s_qty < 0 or f_inc_val < 0 or f_exp_val < 0:
-        st.error("❌ Quantity သို့မဟုတ် Amount များသည် အနုတ်ဂဏန်း (Negative) မဖြစ်ရပါ။")
+        popup_error("Quantity and amount values cannot be negative.")
         st.stop()
 
     # áƒá‹ á€¡á€”á€Šá€ºá€¸á€†á€¯á€¶á€¸ á€¡á€á€»á€€á€ºá€¡á€œá€€á€º á€á€…á€ºá€á€¯á€á€¯ á€•á€«á€á€„á€ºá€™á€¾ á€žá€­á€™á€ºá€¸á€™á€Šá€º
     elif (f_item or f_inc_val > 0 or f_exp_val > 0):
         try:
-            with st.spinner("☁️ Cloud ပေါ်သို့ သိမ်းဆည်းနေပါသည်..."):
+            with st.spinner("Saving transaction to Google Sheets..."):
                 before_amt = float(l_stock) if f_item and f_item != "-" else 0.0
                 after_stock = max((before_amt + float(p_qty)) - float(s_qty), 0.0)
                 balance = after_stock * float(p_pr) if float(p_pr) > 0 else 0.0
@@ -2006,14 +2029,14 @@ if st.button("Save Transaction", use_container_width=True, type="primary"):
 
                 # á…á‹ á€•á€¼á€®á€¸á€†á€¯á€¶á€¸á€€á€¼á€±á€¬á€„á€ºá€¸ á€¡á€žá€­á€•á€±á€¸á€•á€¼á€®á€¸ UI Reset á€œá€¯á€•á€ºá€™á€Šá€º
                 st.session_state.reset_trigger = True
-                st.success("✅ စာရင်းကို Cloud ပေါ်သို့ သိမ်းဆည်းပြီး Stock ပြန်လည်တွက်ချက်ပြီးပါပြီ!")
+                popup_success("Transaction saved and stock recalculated successfully.", after_rerun=True)
                 st.rerun()
 
         except Exception as e:
-            st.error(f"❌ Google Sheets Error: {e}")
+            popup_error(f"Google Sheets error: {e}")
         
     else:
-        st.warning("⚠️ သိမ်းဆည်းရန် အချက်အလက်များ ပြည့်စုံစွာ ဖြည့်စွက်ပေးပါ။")
+        popup_warning("Complete the required information before saving.")
 
 
 
@@ -2462,11 +2485,11 @@ if not df.empty:
                 conn.update(data=all_df)
                 clear_data_cache()
 
-                st.success("Transaction Updated Successfully")
+                popup_success("Transaction updated successfully.")
                 clear_history_selection_after_confirmation()
                 st.rerun()
             except Exception as e:
-                st.error(f"Update Error: {e}")
+                popup_error(f"Transaction update error: {e}")
 
     # LL_2 >>> DELETE DIALOG (Cloud Version) -----
     @st.dialog("⚠️ Confirm Delete")
@@ -2486,11 +2509,11 @@ if not df.empty:
                 conn.update(data=all_df)
                 clear_data_cache()
             
-                st.success("Deleted Successfully!")
+                popup_success("Selected transactions deleted successfully.")
                 clear_history_selection_after_confirmation()
                 st.rerun()
             else:
-                st.error("Wrong Password")
+                popup_error("Incorrect password.")
 
     # MM_1, 2, 3 Logic
     action_selected_ids = []
@@ -2507,7 +2530,7 @@ if not df.empty:
         if len(selected_to_edit) == 1:
             edit_transaction_dialog(selected_to_edit.iloc[0], selected_to_edit.iloc[0]["Original_Index"])
         else:
-            st.warning("Please select exactly one record to edit.")
+            popup_warning("Select exactly one record to edit.")
 
     if delete_btn:
         if not require_permission("delete_history"):
@@ -2516,7 +2539,7 @@ if not df.empty:
         if not selected_to_delete.empty:
             delete_confirmation_dialog(selected_to_delete)
         else:
-            st.warning("Select transactions to delete.")
+            popup_warning("Select one or more transactions to delete.")
 
     if print_btn:
         if not require_permission("print_history"):
@@ -2544,7 +2567,7 @@ if not df.empty:
             show_receipt_ui(cust_name, items_to_print, grand_total)
 
 else:
-    st.info("No transaction history found.")
+    popup_info("No transaction history found.")
 
 
 if has_permission("stock_reports") and st.session_state.get("show_stock_report_preview", False):
