@@ -2285,16 +2285,23 @@ if not df.empty:
         st.session_state["table_key"] = st.session_state.get("table_key", 0) + 1
 
 
-    # Place Select All above the table, centered approximately over its first column.
-    select_all_col, _ = st.columns([0.075, 0.925], gap="small")
+    # Keep the checkbox above the table's first column, with its label outside
+    # the narrow checkbox column so the text cannot be clipped.
+    select_all_col, select_all_label_col, _ = st.columns([0.055, 0.20, 0.745], gap="small")
     select_all_left, select_all_center, select_all_right = select_all_col.columns([1, 1, 1], gap="small")
     with select_all_center:
         st.checkbox(
-            "Deselect all" if st.session_state.get("history_select_all", False) else "Select all",
+            "",
             key="history_select_all",
+            label_visibility="collapsed",
             on_change=apply_history_select_all,
             disabled=display_df.empty,
         )
+    select_all_label = "Deselect all" if st.session_state.get("history_select_all", False) else "Select all"
+    select_all_label_col.markdown(
+        f"<div style='padding-top: 0.35rem; margin-left: -0.5rem;'>{select_all_label}</div>",
+        unsafe_allow_html=True,
+    )
 
     # Style only the read-only cells. Streamlit's editor does not apply Styler
     # formatting to editable columns, and an empty history needs no Styler.
