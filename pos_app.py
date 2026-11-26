@@ -2299,7 +2299,7 @@ if not df.empty:
         )
     select_all_label = "Deselect all" if st.session_state.get("history_select_all", False) else "Select all"
     select_all_label_col.markdown(
-        f"<div style='padding-top: 0.35rem; margin-left: -0.5rem;'>{select_all_label}</div>",
+        f"<div style='padding-top: 0.35rem; margin-left: 0.25rem; line-height: 1.5rem;'>{select_all_label}</div>",
         unsafe_allow_html=True,
     )
 
