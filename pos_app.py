@@ -1890,7 +1890,7 @@ if f_item and f_item not in ["Choose Item", "+ Add New", ""]:
     if l_stock <= 0:
         popup_error(f"{f_item} is out of stock. Current stock: {l_stock:,.0f} units.")
     else:
-        popup_info(f"Current stock for {f_item}: {l_stock:,.0f} units.")
+        st.info(f"💡 Current stock for **{f_item}**: **{l_stock:,.0f}** units")
 
 # á€¡á€œá€­á€¯á€¡á€œá€»á€±á€¬á€€á€º á€ˆá€±á€¸á€”á€¾á€¯á€”á€ºá€¸á€–á€¼á€Šá€·á€ºá€•á€±á€¸á€™á€Šá€·á€º Logic
 def update_input_fields():
