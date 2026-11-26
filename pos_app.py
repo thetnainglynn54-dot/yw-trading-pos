@@ -1060,7 +1060,14 @@ def show_receipt_ui(customer_name, items_list, total_amount):
             printWindow.document.write('</body></html>');
             printWindow.document.close();
             printWindow.focus();
-            setTimeout(function() {{ printWindow.print(); printWindow.close(); }}, 500);
+            printWindow.onafterprint = function() {{
+                try {{
+                    var finishButton = window.parent.document.querySelector('.st-key-history_print_finished button');
+                    if (finishButton) finishButton.click();
+                }} catch (error) {{}}
+                setTimeout(function() {{ printWindow.close(); }}, 250);
+            }};
+            setTimeout(function() {{ printWindow.print(); }}, 500);
         }}
         printVoucher();
         </script>
@@ -2053,6 +2060,11 @@ if not df.empty:
         h_start = h_col1.date_input("Start Date", value=myanmar_today(), key="h_start_val")
         h_end = h_col2.date_input("End Date", value=myanmar_today(), key="h_end_val")
 
+        if st.session_state.pop("history_selection_clear_pending", False):
+            st.session_state["history_select_all"] = False
+            st.session_state["history_selected_rows"] = {}
+            st.session_state["table_key"] = st.session_state.get("table_key", 0) + 1
+
         # Start a fresh selection whenever the visible history records change.
         history_selection_scope = (
             str(h_start), str(h_end), str(sel_cus), str(sel_cid), str(sel_pay),
@@ -2069,6 +2081,10 @@ if not df.empty:
             st.session_state["history_selected_rows"] = {}
             st.session_state["table_key"] = st.session_state.get("table_key", 0) + 1
 
+        def clear_history_selection_after_confirmation():
+            st.session_state["history_selected_rows"] = {}
+            st.session_state["history_selection_clear_pending"] = True
+
         def prepare_history_action():
             selected_ids = [
                 record_id
@@ -2076,7 +2092,6 @@ if not df.empty:
                 if is_selected
             ]
             st.session_state["history_action_selected_ids"] = selected_ids
-            clear_history_selection()
 
         edit_disabled = (
             not has_permission("edit_history")
@@ -2435,7 +2450,7 @@ if not df.empty:
                 clear_data_cache()
 
                 st.success("Transaction Updated Successfully")
-                st.session_state.table_key = st.session_state.get("table_key", 0) + 1
+                clear_history_selection_after_confirmation()
                 st.rerun()
             except Exception as e:
                 st.error(f"Update Error: {e}")
@@ -2459,6 +2474,7 @@ if not df.empty:
                 clear_data_cache()
             
                 st.success("Deleted Successfully!")
+                clear_history_selection_after_confirmation()
                 st.rerun()
             else:
                 st.error("Wrong Password")
@@ -2503,6 +2519,15 @@ if not df.empty:
                     amount = row['Sale Qty'] * row['Sale Price']
                     items_to_print.append({"name": f"{row['Brand']} {row['Item']}", "qty": row['Sale Qty'], "price": row['Sale Price'], "amount": amount})
                     grand_total += amount
+            st.markdown(
+                "<style>.st-key-history_print_finished { display: none !important; }</style>",
+                unsafe_allow_html=True,
+            )
+            st.button(
+                "Finish Print",
+                key="history_print_finished",
+                on_click=clear_history_selection,
+            )
             show_receipt_ui(cust_name, items_to_print, grand_total)
 
 else:
