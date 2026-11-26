@@ -2062,8 +2062,13 @@ if not df.empty:
 
         if st.session_state.pop("history_selection_clear_pending", False):
             st.session_state["history_select_all"] = False
+            st.session_state["history_select_all_explicit"] = False
             st.session_state["history_selected_rows"] = {}
             st.session_state["table_key"] = st.session_state.get("table_key", 0) + 1
+
+        if "history_select_all_explicit" not in st.session_state:
+            st.session_state["history_select_all"] = False
+            st.session_state["history_select_all_explicit"] = False
 
         # Start a fresh selection whenever the visible history records change.
         history_selection_scope = (
@@ -2073,11 +2078,13 @@ if not df.empty:
         if st.session_state.get("history_selection_scope") != history_selection_scope:
             st.session_state["history_selection_scope"] = history_selection_scope
             st.session_state["history_select_all"] = False
+            st.session_state["history_select_all_explicit"] = False
             st.session_state["history_selected_rows"] = {}
             st.session_state["table_key"] = st.session_state.get("table_key", 0) + 1
 
         def clear_history_selection():
             st.session_state["history_select_all"] = False
+            st.session_state["history_select_all_explicit"] = False
             st.session_state["history_selected_rows"] = {}
             st.session_state["table_key"] = st.session_state.get("table_key", 0) + 1
 
@@ -2095,7 +2102,10 @@ if not df.empty:
 
         edit_disabled = (
             not has_permission("edit_history")
-            or st.session_state.get("history_select_all", False)
+            or (
+                st.session_state.get("history_select_all", False)
+                and st.session_state.get("history_select_all_explicit", False)
+            )
         )
     
         h_col3.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
@@ -2222,6 +2232,7 @@ if not df.empty:
 
     def apply_history_select_all():
         selected = bool(st.session_state.get("history_select_all", False))
+        st.session_state["history_select_all_explicit"] = True
         st.session_state["history_selected_rows"] = {
             str(record_id): selected for record_id in display_df["Original_Index"]
         }
@@ -2245,7 +2256,9 @@ if not df.empty:
             bool(selected_by_record.get(str(record_id), False))
             for record_id in display_df["Original_Index"]
         ]
-        st.session_state["history_select_all"] = bool(current_flags) and all(current_flags)
+        if st.session_state.get("history_select_all_explicit", False) and not all(current_flags):
+            st.session_state["history_select_all"] = False
+            st.session_state["history_select_all_explicit"] = False
         st.session_state["table_key"] = st.session_state.get("table_key", 0) + 1
 
 
