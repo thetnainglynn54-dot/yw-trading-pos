@@ -2290,9 +2290,8 @@ if not df.empty:
     select_all_left, select_all_center, select_all_right = select_all_col.columns([1, 1, 1], gap="small")
     with select_all_center:
         st.checkbox(
-            "",
+            "Deselect all" if st.session_state.get("history_select_all", False) else "Select all",
             key="history_select_all",
-            label_visibility="collapsed",
             on_change=apply_history_select_all,
             disabled=display_df.empty,
         )
