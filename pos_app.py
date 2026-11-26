@@ -1888,7 +1888,7 @@ if f_item and f_item not in ["Choose Item", "+ Add New", ""]:
 # UI á€•á€±á€«á€ºá€á€½á€„á€º á€œá€€á€ºá€›á€¾á€­ Stock á€•á€¼á€žá€á€¼á€„á€ºá€¸
 if f_item and f_item not in ["Choose Item", "+ Add New", ""]:
     if l_stock <= 0:
-        popup_error(f"{f_item} is out of stock. Current stock: {l_stock:,.0f} units.")
+        st.error(f"⚠️ Current stock for **{f_item}**: **{l_stock:,.0f}** units (Out of stock)")
     else:
         st.info(f"💡 Current stock for **{f_item}**: **{l_stock:,.0f}** units")
 
