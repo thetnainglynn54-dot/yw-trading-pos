@@ -2064,22 +2064,49 @@ if not df.empty:
             st.session_state["history_selected_rows"] = {}
             st.session_state["table_key"] = st.session_state.get("table_key", 0) + 1
 
+        def clear_history_selection():
+            st.session_state["history_select_all"] = False
+            st.session_state["history_selected_rows"] = {}
+            st.session_state["table_key"] = st.session_state.get("table_key", 0) + 1
+
+        def prepare_history_action():
+            selected_ids = [
+                record_id
+                for record_id, is_selected in st.session_state.get("history_selected_rows", {}).items()
+                if is_selected
+            ]
+            st.session_state["history_action_selected_ids"] = selected_ids
+            clear_history_selection()
+
         edit_disabled = (
             not has_permission("edit_history")
             or st.session_state.get("history_select_all", False)
         )
     
         h_col3.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        history_search = h_col3.button("🔍 Search", use_container_width=True, type="primary")    
+        history_search = h_col3.button(
+            "🔍 Search", use_container_width=True, type="primary", on_click=clear_history_selection
+        )
 
         h_col4.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        edit_btn = h_col4.button("📝 Edit", use_container_width=True, type="secondary", disabled=edit_disabled)
+        edit_btn = h_col4.button(
+            "📝 Edit", use_container_width=True, type="secondary", disabled=edit_disabled,
+            on_click=prepare_history_action
+        )
 
         h_col5.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        print_btn = h_col5.button("🖨 Print", use_container_width=True, type="primary", disabled=not has_permission("print_history"))
+        print_btn = h_col5.button(
+            "🖨 Print", use_container_width=True, type="primary",
+            disabled=not has_permission("print_history"),
+            on_click=prepare_history_action
+        )
 
         h_col6.markdown('<div style="margin-top: 28px;"></div>', unsafe_allow_html=True)
-        delete_btn = h_col6.button("🗑 Delete", use_container_width=True, type="secondary", disabled=not has_permission("delete_history"))
+        delete_btn = h_col6.button(
+            "🗑 Delete", use_container_width=True, type="secondary",
+            disabled=not has_permission("delete_history"),
+            on_click=prepare_history_action
+        )
 
     # Filter Logic
     h_df = df.copy()
@@ -2437,10 +2464,17 @@ if not df.empty:
                 st.error("Wrong Password")
 
     # MM_1, 2, 3 Logic
+    action_selected_ids = []
+    if edit_btn or print_btn or delete_btn:
+        action_selected_ids = st.session_state.pop("history_action_selected_ids", [])
+    selected_action_rows = display_df[
+        display_df["Original_Index"].astype(str).isin({str(record_id) for record_id in action_selected_ids})
+    ]
+
     if edit_btn:
         if not require_permission("edit_history"):
             st.stop()
-        selected_to_edit = edited_df[edited_df["Select"] == True]
+        selected_to_edit = selected_action_rows
         if len(selected_to_edit) == 1:
             edit_transaction_dialog(selected_to_edit.iloc[0], selected_to_edit.iloc[0]["Original_Index"])
         else:
@@ -2449,7 +2483,7 @@ if not df.empty:
     if delete_btn:
         if not require_permission("delete_history"):
             st.stop()
-        selected_to_delete = edited_df[edited_df["Select"] == True]
+        selected_to_delete = selected_action_rows
         if not selected_to_delete.empty:
             delete_confirmation_dialog(selected_to_delete)
         else:
@@ -2459,7 +2493,7 @@ if not df.empty:
         if not require_permission("print_history"):
             st.stop()
         # á€žá€„á€ºá á€™á€°á€›á€„á€ºá€¸ Print Logic á€¡á€á€­á€¯á€„á€ºá€¸ á€†á€€á€ºá€œá€€á€ºá€¡á€žá€¯á€¶á€¸á€•á€¼á€¯á€”á€­á€¯á€„á€ºá€•á€«á€žá€Šá€º
-        selected_rows = edited_df[edited_df["Select"] == True]
+        selected_rows = selected_action_rows
         if not selected_rows.empty:
             cust_name = str(selected_rows.iloc[0]['Customer'])
             items_to_print = []
