@@ -2287,7 +2287,7 @@ if not df.empty:
 
     # Keep the checkbox above the table's first column, with its label outside
     # the narrow checkbox column so the text cannot be clipped.
-    select_all_col, select_all_label_col, _ = st.columns([0.055, 0.20, 0.745], gap="small")
+    select_all_col, select_all_label_col, _ = st.columns([0.035, 0.20, 0.765], gap="small")
     select_all_left, select_all_center, select_all_right = select_all_col.columns([1, 1, 1], gap="small")
     with select_all_center:
         st.checkbox(
@@ -2325,7 +2325,7 @@ if not df.empty:
         disabled=read_only_cols,
         column_config={
             "Select": st.column_config.CheckboxColumn(
-                "", width="small", default=False
+                "", width=40, default=False
             ),
             "Customer Type": st.column_config.TextColumn("CID"),
             "Purchase Qty": st.column_config.NumberColumn("Pur Qty"),
